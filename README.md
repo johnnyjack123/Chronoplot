@@ -1,0 +1,130 @@
+# Chronoplot
+
+Build beautiful, printable timelines in the browser.
+
+Create a project, set the range it spans, drag out cards on as many lanes as you
+need, and export a clean vector PDF that breaks across pages on calendar
+boundaries.
+
+---
+
+## Quick start
+
+```bash
+npm install
+cp env.example .env      # then edit SESSION_SECRET
+npm run dev
+```
+
+Open <http://localhost:5173>. The first account you register owns everything it
+creates; set `ALLOW_REGISTRATION=false` in `.env` once your team has signed up.
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | API on :5174 and the browser app on :5173, both watching |
+| `npm run build` | Type-checks and builds both workspaces |
+| `npm start` | Runs the built server, which also serves the built app |
+| `npm run typecheck` | Type-checks without emitting |
+
+In production the server serves the built browser app from its own origin. That
+is what lets the session cookie stay `SameSite=Lax` with no CORS exceptions, so
+do not split the two across different hosts without revisiting the cookie
+settings in `server/src/auth/plugin.ts`.
+
+---
+
+## How it is put together
+
+```
+shared/     the timeline document model + validation, used by both sides
+server/     Fastify API, session auth, SQLite or Postgres
+web/        React editor, timeline geometry, PDF exporter
+docs/       the design system
+```
+
+**Editing never waits on the network.** The whole document lives in the browser
+and all layout maths runs there, which is what keeps dragging responsive. The
+sync engine pushes the document up after a short quiet period, and on tab hide
+or close. See `web/src/state/sync.ts`.
+
+**Screen and PDF are the same drawing.** `web/src/features/timeline/geometry.ts`
+computes every position; the React canvas feeds it pixels and the exporter feeds
+it millimetres. Neither renderer has layout logic of its own, so the export
+cannot drift from what you arranged.
+
+**The PDF is drawn, not screenshotted.** Text stays selectable, nothing
+pixelates, and page breaks land on calendar boundaries where one is close enough
+to the page edge. A one-page A4 export of a busy year is around 9 KB.
+
+### Switching to Postgres
+
+Change two lines in `.env` — no code changes, no migration tool:
+
+```
+DB_DRIVER=postgres
+DATABASE_URL=postgres://user:password@localhost:5432/chronoplot
+```
+
+The schema is created on boot. Everything that differs between the two databases
+is contained in `server/src/db/adapter.ts`; queries elsewhere are written once in
+portable SQL.
+
+---
+
+## Security
+
+Session auth, deliberately conventional:
+
+- passwords hashed with **argon2id** at OWASP's parameters
+- sessions are opaque random tokens in an httpOnly, `SameSite=Lax` cookie; the
+  database stores only their SHA-256, so a database leak cannot be replayed
+- CSRF defended twice over: an origin check plus a double-submit token derived
+  from the session
+- per-IP rate limiting, plus per-account attempt limiting on sign-in
+- every project read and write resolves the caller's role first; a project you
+  cannot see reports as missing rather than forbidden, so ids cannot be probed
+
+Changing a password ends every existing session and issues the current browser a
+fresh one.
+
+---
+
+## Tests
+
+```bash
+node server/test/smoke.mjs                 # needs the server running
+npx tsx web/test/dates.test.ts             # calendar maths
+npx tsx --tsconfig web/tsconfig.json web/test/pdf-plan.test.ts   # pagination
+```
+
+The smoke test drives the real API over HTTP: registration, login, CSRF
+rejection, cross-origin rejection, sharing, read-only enforcement, version
+conflicts and document integrity.
+
+---
+
+## Design
+
+`docs/DESIGN.md` is the contract — type scale, spacing, motion, the five themes
+and the card palette. Every value on screen traces back to a token there. The
+card colours are a validated categorical palette rather than hand-picked hues;
+the measured colourblind-separation numbers are recorded in section 6.
+
+Themes: **Midnight** (default), **Eclipse**, **Abyss**, **Daylight**,
+**Parchment**. A project stores a theme so a shared timeline looks the same for
+everyone; a viewer can override it locally without changing the project.
+
+---
+
+## Keyboard
+
+| | |
+|---|---|
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
+| `Ctrl+D` | Duplicate the selected card |
+| `Delete` | Delete the selected card |
+| `←` / `→` | Nudge by a day (`Shift` for a week) |
+| `Ctrl+` `+` / `-` | Zoom |
+| `Esc` | Clear the selection |
+
+Drag across an empty lane to create a card; a single click makes a milestone.

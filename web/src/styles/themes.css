@@ -1,0 +1,217 @@
+/*
+ * Chronoplot themes.
+ *
+ * A theme redefines colour roles and nothing else - no sizes, no radii, no
+ * durations. Every theme must define the complete role set from docs/DESIGN.md
+ * section 5; there are deliberately no fallback values, so an omission fails
+ * loudly instead of silently inheriting another theme's colour.
+ *
+ * Applied as data-theme="<name>" on <html>.
+ */
+
+/* ==========================================================================
+   Status colours - fixed across all five themes.
+   A warning must not change meaning when the user changes theme, so these are
+   declared once, outside every theme block, and never overridden.
+   ========================================================================== */
+:root {
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+}
+
+/* ==========================================================================
+   MIDNIGHT - dark, deep blue-slate. The default.
+   ========================================================================== */
+:root,
+[data-theme="midnight"] {
+  color-scheme: dark;
+
+  --canvas: #0b0f16;
+  --surface: #121721;
+  --surface-raised: #1a2130;
+  --surface-sunken: #090d13;
+
+  --border: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.14);
+
+  --ink: #e8ecf3;
+  --ink-muted: #98a4ba;
+  --ink-subtle: #6a7689;
+
+  --accent: #6d8cff;
+  --accent-hover: #849dff;
+  --accent-ink: #07091a;
+  --accent-soft: rgb(109 140 255 / 0.14);
+
+  --grid-line: rgb(255 255 255 / 0.05);
+  --grid-line-strong: rgb(255 255 255 / 0.11);
+
+  --shadow-color: rgb(0 0 0 / 0.5);
+}
+
+/* ==========================================================================
+   ECLIPSE - dark, neutral graphite with no colour cast.
+   ========================================================================== */
+[data-theme="eclipse"] {
+  color-scheme: dark;
+
+  --canvas: #0c0c0d;
+  --surface: #141416;
+  --surface-raised: #1d1d20;
+  --surface-sunken: #08080a;
+
+  --border: rgb(255 255 255 / 0.08);
+  --border-strong: rgb(255 255 255 / 0.15);
+
+  --ink: #eceae7;
+  --ink-muted: #a19e99;
+  --ink-subtle: #706d68;
+
+  --accent: #e0a03a;
+  --accent-hover: #eeb254;
+  --accent-ink: #1a1206;
+  --accent-soft: rgb(224 160 58 / 0.14);
+
+  --grid-line: rgb(255 255 255 / 0.05);
+  --grid-line-strong: rgb(255 255 255 / 0.11);
+
+  --shadow-color: rgb(0 0 0 / 0.55);
+}
+
+/* ==========================================================================
+   ABYSS - dark, cool deep teal.
+   ========================================================================== */
+[data-theme="abyss"] {
+  color-scheme: dark;
+
+  --canvas: #06110f;
+  --surface: #0d1a18;
+  --surface-raised: #142523;
+  --surface-sunken: #030c0b;
+
+  --border: rgb(190 255 240 / 0.09);
+  --border-strong: rgb(190 255 240 / 0.16);
+
+  --ink: #e0efea;
+  --ink-muted: #8fa8a2;
+  --ink-subtle: #5f7873;
+
+  --accent: #2fd4b0;
+  --accent-hover: #4ee3c2;
+  --accent-ink: #04211b;
+  --accent-soft: rgb(47 212 176 / 0.14);
+
+  --grid-line: rgb(190 255 240 / 0.05);
+  --grid-line-strong: rgb(190 255 240 / 0.11);
+
+  --shadow-color: rgb(0 0 0 / 0.55);
+}
+
+/* ==========================================================================
+   DAYLIGHT - light, clean and cool. The presentation default.
+   ========================================================================== */
+[data-theme="daylight"] {
+  color-scheme: light;
+
+  --canvas: #f4f5f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eef0f4;
+
+  --border: rgb(14 20 32 / 0.1);
+  --border-strong: rgb(14 20 32 / 0.18);
+
+  --ink: #0e1420;
+  --ink-muted: #545f76;
+  --ink-subtle: #7b859a;
+
+  --accent: #3055d8;
+  --accent-hover: #2646c2;
+  --accent-ink: #ffffff;
+  --accent-soft: rgb(48 85 216 / 0.1);
+
+  --grid-line: rgb(14 20 32 / 0.06);
+  --grid-line-strong: rgb(14 20 32 / 0.13);
+
+  --shadow-color: rgb(14 20 32 / 0.1);
+}
+
+/* ==========================================================================
+   PARCHMENT - light, warm paper. Low glare, projector-friendly.
+   ========================================================================== */
+[data-theme="parchment"] {
+  color-scheme: light;
+
+  --canvas: #f6f2ea;
+  --surface: #fffdf9;
+  --surface-raised: #fffdf9;
+  --surface-sunken: #efe9dd;
+
+  --border: rgb(36 31 24 / 0.11);
+  --border-strong: rgb(36 31 24 / 0.19);
+
+  --ink: #241f18;
+  --ink-muted: #6b6154;
+  --ink-subtle: #93897a;
+
+  --accent: #a8622a;
+  --accent-hover: #8f5122;
+  --accent-ink: #fffaf3;
+  --accent-soft: rgb(168 98 42 / 0.11);
+
+  --grid-line: rgb(36 31 24 / 0.07);
+  --grid-line-strong: rgb(36 31 24 / 0.14);
+
+  --shadow-color: rgb(60 44 26 / 0.12);
+}
+
+/* ==========================================================================
+   Card palette
+   --------------------------------------------------------------------------
+   Eight categorical slots, assigned in fixed order and never cycled. The dark
+   column is the same eight hues re-stepped for a dark surface, not a flip.
+   Both columns were validated against Chronoplot's own surfaces - see
+   docs/DESIGN.md section 6 for the measured numbers.
+
+   Each slot ships with the ink its label is drawn in, chosen by contrast so a
+   card reads identically in every theme.
+   ========================================================================== */
+:root {
+  --card-ink-light: #ffffff;
+  --card-ink-dark: #0b0f16;
+
+  /* Neutral "no category" slot - deliberately outside the categorical set. */
+  --card-slate: #7c8698;
+  --card-slate-ink: var(--card-ink-light);
+}
+
+/* Dark themes: the dark steps. Declared on :root so midnight (which has no
+   explicit attribute) picks them up, then re-declared per dark theme so the
+   attribute selector wins over the light-theme block below. */
+:root,
+[data-theme="midnight"],
+[data-theme="eclipse"],
+[data-theme="abyss"] {
+  --card-1: #3987e5;  --card-1-ink: var(--card-ink-dark);   /* blue    */
+  --card-2: #d95926;  --card-2-ink: var(--card-ink-dark);   /* orange  */
+  --card-3: #199e70;  --card-3-ink: var(--card-ink-dark);   /* aqua    */
+  --card-4: #c98500;  --card-4-ink: var(--card-ink-dark);   /* yellow  */
+  --card-5: #d55181;  --card-5-ink: var(--card-ink-dark);   /* magenta */
+  --card-6: #008300;  --card-6-ink: var(--card-ink-light);  /* green   */
+  --card-7: #9085e9;  --card-7-ink: var(--card-ink-dark);   /* violet  */
+  --card-8: #e66767;  --card-8-ink: var(--card-ink-dark);   /* red     */
+}
+
+[data-theme="daylight"],
+[data-theme="parchment"] {
+  --card-1: #2a78d6;  --card-1-ink: var(--card-ink-light);
+  --card-2: #eb6834;  --card-2-ink: var(--card-ink-dark);
+  --card-3: #1baf7a;  --card-3-ink: var(--card-ink-dark);
+  --card-4: #eda100;  --card-4-ink: var(--card-ink-dark);
+  --card-5: #e87ba4;  --card-5-ink: var(--card-ink-dark);
+  --card-6: #008300;  --card-6-ink: var(--card-ink-light);
+  --card-7: #4a3aa7;  --card-7-ink: var(--card-ink-light);
+  --card-8: #e34948;  --card-8-ink: var(--card-ink-dark);
+}

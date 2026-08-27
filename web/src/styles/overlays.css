@@ -1,0 +1,74 @@
+/*
+ * Enter/exit animations for the Radix-driven overlays.
+ *
+ * Driven by `data-state` rather than by JavaScript, so Radix keeps full control
+ * of mounting and focus while the motion stays in CSS with the rest of the
+ * design system. Exits are faster than entrances - see docs/DESIGN.md section 4.
+ */
+
+@keyframes cp-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cp-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes cp-pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes cp-pop-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.97) translateY(2px); }
+}
+
+@keyframes cp-slide-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.cp-overlay[data-state="open"] {
+  animation: cp-fade-in var(--dur-base) var(--ease-standard);
+}
+
+.cp-overlay[data-state="closed"] {
+  animation: cp-fade-out var(--dur-fast) var(--ease-exit);
+}
+
+.cp-pop[data-state="open"],
+.cp-pop[data-state="delayed-open"] {
+  animation: cp-pop-in var(--dur-base) var(--ease-standard);
+}
+
+.cp-pop[data-state="closed"] {
+  animation: cp-pop-out var(--dur-fast) var(--ease-exit);
+}
+
+.cp-slide-in {
+  animation: cp-slide-in var(--dur-base) var(--ease-standard);
+}
+
+/*
+ * The horizontal fade at the edges of the plot area - the one gradient the
+ * design system allows, because it signals "this scrolls" without a scrollbar.
+ */
+.cp-edge-fade {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 24px,
+    black calc(100% - 24px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 24px,
+    black calc(100% - 24px),
+    transparent 100%
+  );
+}

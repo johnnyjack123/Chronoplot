@@ -1,0 +1,12 @@
+/*
+ * Entry point for all styling. Import order matters:
+ *   1. Tailwind, which brings its preflight reset and utility engine
+ *   2. themes.css, which defines the colour values every token resolves to
+ *   3. tokens.css, whose @theme block maps those values onto utility names
+ *   4. base.css, the element-level styles that build on both
+ */
+@import "tailwindcss";
+@import "./themes.css";
+@import "./tokens.css";
+@import "./base.css";
+@import "./overlays.css";

@@ -1,0 +1,153 @@
+/*
+ * Chronoplot design primitives.
+ *
+ * Tokens that Tailwind should turn into utilities live in the `@theme` block;
+ * everything else lives in `:root` below it. Colour *values* are in themes.css
+ * - this file only maps them to utility names, so `bg-surface` follows whatever
+ * the active theme defines.
+ *
+ * See docs/DESIGN.md for the reasoning behind every number here. Nothing in
+ * this file is arbitrary, and nothing should be added without updating it.
+ */
+
+@theme {
+  /* ---------------------------------------------------------------- type -- */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* A 1.2 minor-third scale, rounded to whole pixels. Seven steps, no more. */
+  --text-display: 1.875rem;
+  --text-display--line-height: 2.25rem;
+  --text-display--font-weight: 600;
+
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.75rem;
+  --text-title--font-weight: 600;
+
+  --text-heading: 1rem;
+  --text-heading--line-height: 1.5rem;
+  --text-heading--font-weight: 600;
+
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.125rem;
+  --text-label--font-weight: 500;
+
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-caption--font-weight: 500;
+
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 0.875rem;
+  --text-micro--font-weight: 600;
+  --text-micro--letter-spacing: 0.04em;
+
+  /* -------------------------------------------------------------- radii -- */
+  /* Reset Tailwind's own scale so only these five values are reachable. */
+  --radius-*: initial;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  /* ---------------------------------------------------------- elevation -- */
+  /*
+   * Each level pairs a tight contact shadow with a wide ambient one; a single
+   * blur reads flat, which is most of what makes an interface look cheap.
+   * --shadow-color is theme-tinted, never pure black.
+   */
+  --shadow-*: initial;
+  --shadow-1: 0 1px 2px -1px var(--shadow-color), 0 2px 6px -2px var(--shadow-color);
+  --shadow-2: 0 2px 4px -2px var(--shadow-color), 0 8px 20px -6px var(--shadow-color);
+  --shadow-3: 0 4px 8px -4px var(--shadow-color), 0 20px 44px -12px var(--shadow-color);
+  --shadow-4: 0 8px 16px -6px var(--shadow-color), 0 32px 64px -16px var(--shadow-color);
+
+  /* ------------------------------------------------------------- easing -- */
+  --ease-*: initial;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ------------------------------------------------------------- colour -- */
+  /*
+   * Tailwind's default palette is cleared so a stray `bg-blue-500` fails loudly
+   * instead of quietly bypassing the theme system. Every colour below resolves
+   * through themes.css.
+   */
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
+
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-serious: var(--serious);
+  --color-critical: var(--critical);
+}
+
+:root {
+  /* --------------------------------------------------- layout constants -- */
+  --row-height: 44px;
+  --row-gap: 8px;
+  --card-height: 32px;
+  --axis-height: 56px;
+  --sidebar-width: 264px;
+  --inspector-width: 320px;
+  --rail-height: 52px;
+
+  /* -------------------------------------------------------------- motion -- */
+  --dur-instant: 90ms;
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 380ms;
+
+  /* ------------------------------------------------------------ z-layers -- */
+  --z-plot: 1;
+  --z-sticky: 10;
+  --z-drag: 40;
+  --z-popover: 50;
+  --z-dialog: 60;
+  --z-toast: 70;
+}
+
+/*
+ * One place to honour the reduced-motion preference. Components never check it
+ * themselves - they read the duration tokens, which collapse here.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 1ms;
+    --dur-fast: 1ms;
+    --dur-base: 1ms;
+    --dur-slow: 1ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
