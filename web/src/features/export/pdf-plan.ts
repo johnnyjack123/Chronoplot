@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Page planning for the PDF export.
  *
  * Deliberately free of any jsPDF import: the export dialog needs a live page
@@ -37,6 +37,13 @@ export const MARGIN = 12;
 export const LANE_LABEL_WIDTH = 34;
 export const AXIS_HEIGHT = 11;
 export const FOOTER_HEIGHT = 7;
+
+/**
+ * Scales the axis coarsening thresholds for print. The page is measured in
+ * millimetres, so a tick that needs 34px on screen needs roughly a tenth of
+ * that in mm - the same rule, in the units of the page.
+ */
+export const PRINT_TICK_SCALE = 0.3;
 
 /** Millimetre layout constants, the print counterparts of the screen ones. */
 export const PRINT_LAYOUT = {
@@ -90,7 +97,7 @@ export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
   const mmPerDay = options.mmPerDay ?? availableWidth / totalDays;
 
   const built = computeLayout(doc, { ...PRINT_LAYOUT, unitsPerDay: mmPerDay });
-  const axis = buildAxis(doc, mmPerDay);
+  const axis = buildAxis(doc, mmPerDay, undefined, PRINT_TICK_SCALE);
 
   /* ---------------------------------------------------- horizontal slices -- */
   const columns: PagePlan["columns"] = [];

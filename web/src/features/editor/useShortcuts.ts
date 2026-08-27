@@ -36,6 +36,11 @@ export function useShortcuts(enabled: boolean): void {
         store.setZoom(store.unitsPerDay / 1.5);
         return;
       }
+      if (mod && event.key === "0") {
+        event.preventDefault();
+        store.zoomToFit();
+        return;
+      }
 
       if (isTyping(event.target)) return;
 

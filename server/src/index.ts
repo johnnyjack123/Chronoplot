@@ -100,6 +100,12 @@ await app.register(async (scope) => {
 const webDist = resolve(repoRoot, "web", "dist");
 if (config.isProduction && existsSync(webDist)) {
   await app.register(fastifyStatic, { root: webDist, index: false });
+
+  // With directory indexes disabled, @fastify/static answers a request for "/"
+  // by trying to redirect, which it then refuses - so the root needs its own
+  // route. Every other client-side path falls through to the handler below.
+  app.get("/", (_request, reply) => reply.sendFile("index.html"));
+
   app.setNotFoundHandler((request, reply) => {
     if (request.url.startsWith("/api/")) {
       return reply.status(404).send({ error: { code: "not_found", message: "No such endpoint." } });

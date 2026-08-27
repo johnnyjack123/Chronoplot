@@ -70,17 +70,3 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
     );
   },
 );
-
-/** A date input that always speaks ISO dates, matching the document model. */
-export const DateInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function DateInput({ className, ...rest }, ref) {
-    return (
-      <input
-        ref={ref}
-        type="date"
-        className={cn(CONTROL, "tabular h-8 px-2.5 text-body", className)}
-        {...rest}
-      />
-    );
-  },
-);

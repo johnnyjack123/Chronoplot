@@ -2,8 +2,7 @@
 
 Build beautiful, printable timelines in the browser.
 
-Create a project, set the range it spans, drag out cards on as many lanes as you
-need, and export a clean vector PDF that breaks across pages on calendar
+Create a project, set the range it spans, drag out cards on as many lanes as you need, and export a clean vector PDF that breaks across pages on calendar
 boundaries.
 
 ---
@@ -56,6 +55,31 @@ cannot drift from what you arranged.
 pixelates, and page breaks land on calendar boundaries where one is close enough
 to the page edge. A one-page A4 export of a busy year is around 9 KB.
 
+### Docker
+
+```bash
+SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d --build
+```
+
+One image serves both the API and the browser app, which is what keeps them on
+a single origin. The database lives on the `chronoplot-data` volume, never in an
+image layer — losing that volume loses every project.
+
+```bash
+docker build -t chronoplot .        # image only
+```
+
+### Backups
+
+```bash
+node scripts/backup-db.mjs
+```
+
+Writes a timestamped, self-contained copy into `backups/` and verifies it by
+reopening it and comparing row counts. Use this rather than copying the `.sqlite`
+file: WAL journalling keeps recent commits in a separate `-wal` file, so a plain
+copy can be almost empty. Safe to run while the server is up.
+
 ### Switching to Postgres
 
 Change two lines in `.env` — no code changes, no migration tool:
@@ -92,10 +116,16 @@ fresh one.
 ## Tests
 
 ```bash
-node server/test/smoke.mjs                 # needs the server running
-npx tsx web/test/dates.test.ts             # calendar maths
-npx tsx --tsconfig web/tsconfig.json web/test/pdf-plan.test.ts   # pagination
+node server/test/smoke.mjs                                        # needs the server running
+npx tsx --tsconfig web/tsconfig.json web/test/dates.test.ts       # calendar maths
+npx tsx --tsconfig web/tsconfig.json web/test/axis.test.ts        # axis windowing + zoom
+npx tsx --tsconfig web/tsconfig.json web/test/pdf-plan.test.ts    # pagination
 ```
+
+To point the smoke test at another instance:
+`BASE=http://localhost:5188 ORIGIN=http://localhost:5188 node server/test/smoke.mjs`
+(`ORIGIN` must equal the server's `APP_ORIGIN` — the origin check is one of the
+things under test.)
 
 The smoke test drives the real API over HTTP: registration, login, CSRF
 rejection, cross-origin rejection, sharing, read-only enforcement, version
@@ -124,7 +154,13 @@ everyone; a viewer can override it locally without changing the project.
 | `Ctrl+D` | Duplicate the selected card |
 | `Delete` | Delete the selected card |
 | `←` / `→` | Nudge by a day (`Shift` for a week) |
-| `Ctrl+` `+` / `-` | Zoom |
-| `Esc` | Clear the selection |
+| `Ctrl+` `+` / `-` | Zoom, or `Ctrl`+scroll to zoom around the pointer |
+| `Ctrl+0` | Fit the whole timeline on screen |
+| `Esc` | Clear the selection, back to timeline settings |
 
 Drag across an empty lane to create a card; a single click makes a milestone.
+
+The axis picks its own units as you zoom: the granularity setting is the
+*finest* unit you want to see, and coarser ones take over on the way out. A
+timeline can span centuries and still scroll smoothly, because only the visible
+slice is ever built.

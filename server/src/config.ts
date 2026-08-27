@@ -1,10 +1,44 @@
+import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 
 const here = dirname(fileURLToPath(import.meta.url));
-/** Repo root, two levels up from server/src (or server/dist in a build). */
-export const repoRoot = resolve(here, "..", "..");
+
+/**
+ * Finds the repository root by walking up to the package.json that declares the
+ * workspaces.
+ *
+ * Counting directory levels does not work: running from source the entry point
+ * is `server/src`, but a build puts it at `server/dist/server/src` because the
+ * compiler emits the shared workspace alongside it. A fixed "../.." was right
+ * in development and silently wrong in production, where it made the server
+ * look for the browser bundle inside its own dist directory.
+ */
+function findRepoRoot(from: string): string {
+  let dir = from;
+  for (let depth = 0; depth < 10; depth++) {
+    const manifest = resolve(dir, "package.json");
+    if (existsSync(manifest)) {
+      try {
+        const parsed = JSON.parse(readFileSync(manifest, "utf8")) as { workspaces?: unknown };
+        if (Array.isArray(parsed.workspaces)) return dir;
+      } catch {
+        // An unreadable package.json is not the root; keep walking.
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error(
+    `Could not locate the Chronoplot root from ${from}. Set CHRONOPLOT_ROOT to the directory containing the workspace package.json.`,
+  );
+}
+
+export const repoRoot = process.env.CHRONOPLOT_ROOT
+  ? resolve(process.env.CHRONOPLOT_ROOT)
+  : findRepoRoot(here);
 
 loadDotenv({ path: resolve(repoRoot, ".env") });
 

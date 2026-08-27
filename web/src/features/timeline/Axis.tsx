@@ -70,27 +70,53 @@ export const PlotBackground = memo(function PlotBackground({
   width: number;
   height: number;
 }) {
+  /*
+   * Drawn as one SVG rather than a div per gridline. The axis is already
+   * windowed to the viewport, but a long timeline still produces a few hundred
+   * lines per screen, and that many absolutely-positioned elements costs far
+   * more in layout and paint than a single path does.
+   */
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0" style={{ width, height }}>
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute left-0 top-0"
+      width={width}
+      height={height}
+    >
       {axis.weekendBands.map((band, index) => (
-        <div
+        <rect
           key={`weekend-${index}`}
-          className="absolute top-0 bg-ink/[0.035]"
-          style={{ left: band.x, width: band.width, height }}
+          x={band.x}
+          y={0}
+          width={band.width}
+          height={height}
+          className="fill-ink/[0.035]"
         />
       ))}
 
       {axis.lower.map((tick) => (
-        <div
+        <line
           key={`minor-${tick.date}`}
-          className="absolute top-0 w-px bg-line"
-          style={{ left: tick.x, height }}
+          x1={tick.x + 0.5}
+          x2={tick.x + 0.5}
+          y1={0}
+          y2={height}
+          className="stroke-line"
+          strokeWidth={1}
         />
       ))}
 
       {axis.majorLines.map((x) => (
-        <div key={`major-${x}`} className="absolute top-0 w-px bg-line-strong" style={{ left: x, height }} />
+        <line
+          key={`major-${x}`}
+          x1={x + 0.5}
+          x2={x + 0.5}
+          y1={0}
+          y2={height}
+          className="stroke-line-strong"
+          strokeWidth={1}
+        />
       ))}
-    </div>
+    </svg>
   );
 });

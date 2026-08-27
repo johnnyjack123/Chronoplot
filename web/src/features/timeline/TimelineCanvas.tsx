@@ -1,4 +1,7 @@
-import { useCallback, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
+  type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent,
+} from "react";
 import type { TimelineDoc } from "@shared";
 import { cn } from "@/lib/cn";
 import { addDays, clampDate, daysBetween, snapToPrecision, today } from "@/lib/dates";
@@ -9,8 +12,8 @@ import { PlotBackground, TimeAxis } from "./Axis";
 import { LinkLayer, PendingLink } from "./Links";
 import { TimelineCard, type DragMode } from "./TimelineCard";
 import {
-  buildAxis, clampToWindow, dateAtX, laneAtY, layout as computeLayout, snapDrag, xOf,
-  DEFAULT_LAYOUT, type PlacedItem,
+  buildAxis, clampToWindow, clampZoom, dateAtX, laneAtY, layout as computeLayout, snapDrag, xOf,
+  DEFAULT_LAYOUT, SIDEBAR_WIDTH, type PlacedItem,
 } from "./geometry";
 
 /*
@@ -35,19 +38,75 @@ type DragState =
   | { kind: "link"; fromId: string; x: number; y: number; overItemId: string | null }
   | { kind: "create"; rowId: string; anchor: string; current: string };
 
+/**
+ * How far beyond the visible edges to keep drawing. Enough that a fast scroll
+ * never reaches un-rendered space before the next frame fills it in.
+ */
+const OVERSCAN = 900;
+
 export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: boolean }) {
   const unitsPerDay = useEditorStore((state) => state.unitsPerDay);
   const selection = useEditorStore((state) => state.selection);
   const select = useEditorStore((state) => state.select);
+  const setZoom = useEditorStore((state) => state.setZoom);
 
   const plotRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState>(null);
+
+  /*
+   * The scrolled viewport, tracked so the axis can be built for just the slice
+   * on screen. Without this, a century-long timeline builds and mounts tens of
+   * thousands of gridlines on every render and the editor locks up.
+   */
+  const [view, setView] = useState({ scrollLeft: 0, width: 1200 });
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+
+    let frame = 0;
+    const measure = (): void => {
+      frame = 0;
+      // The toolbar's "fit" needs the plot width, and this is the only place
+      // that actually knows it.
+      useEditorStore.getState().setPlotWidth(Math.max(120, element.clientWidth - SIDEBAR_WIDTH));
+      setView((previous) =>
+        previous.scrollLeft === element.scrollLeft && previous.width === element.clientWidth
+          ? previous
+          : { scrollLeft: element.scrollLeft, width: element.clientWidth },
+      );
+    };
+    // Coalesce to one measurement per frame; scroll fires far more often.
+    const schedule = (): void => {
+      if (frame === 0) frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    element.addEventListener("scroll", schedule, { passive: true });
+    const observer = new ResizeObserver(schedule);
+    observer.observe(element);
+
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+      element.removeEventListener("scroll", schedule);
+      observer.disconnect();
+    };
+  }, []);
 
   const layout = useMemo(
     () => computeLayout(doc, { ...DEFAULT_LAYOUT, unitsPerDay }),
     [doc, unitsPerDay],
   );
-  const axis = useMemo(() => buildAxis(doc, unitsPerDay), [doc, unitsPerDay]);
+
+  /** Visible slice of the plot, in plot-local units. */
+  const windowFromX = Math.max(0, view.scrollLeft - OVERSCAN);
+  const windowToX = view.scrollLeft + Math.max(0, view.width - SIDEBAR_WIDTH) + OVERSCAN;
+
+  const axis = useMemo(
+    () => buildAxis(doc, unitsPerDay, { fromX: windowFromX, toX: windowToX }),
+    [doc, unitsPerDay, windowFromX, windowToX],
+  );
 
   const selectedItemId = selection.kind === "item" ? selection.id : null;
   const todayIso = today();
@@ -216,6 +275,44 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
     [drag, select],
   );
 
+  /*
+   * Ctrl/Cmd + wheel zooms around the pointer, the way every map and design
+   * tool behaves. Anchoring on the cursor matters at these zoom ranges: without
+   * it, zooming out from year ten thousand throws the view somewhere unrelated.
+   */
+  const onWheel = useCallback(
+    (event: ReactWheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+
+      const container = scrollRef.current;
+      const plot = plotRef.current;
+      if (!container || !plot) return;
+
+      const pointerPlotX = event.clientX - plot.getBoundingClientRect().left;
+      const next = clampZoom(unitsPerDay * Math.exp(-event.deltaY * 0.0015));
+      if (next === unitsPerDay) return;
+
+      setZoom(next);
+      // Keep the day under the cursor under the cursor.
+      const ratio = next / unitsPerDay;
+      container.scrollLeft += pointerPlotX * (ratio - 1);
+    },
+    [setZoom, unitsPerDay],
+  );
+
+  // React attaches wheel listeners passively, which forbids preventDefault, so
+  // the zoom handler has to be registered directly.
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const handler = (event: WheelEvent): void => {
+      if (event.ctrlKey || event.metaKey) event.preventDefault();
+    };
+    element.addEventListener("wheel", handler, { passive: false });
+    return () => element.removeEventListener("wheel", handler);
+  }, []);
+
   /* ------------------------------------------------------------ rendering -- */
 
   const createPreview =
@@ -240,16 +337,16 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
       : undefined;
 
   return (
-    <div className="relative flex-1 overflow-auto bg-sunken">
+    <div ref={scrollRef} onWheel={onWheel} className="relative flex-1 overflow-auto bg-sunken">
       <div
         className="relative"
-        style={{ width: `calc(var(--sidebar-width) + ${layout.totalWidth}px)`, minWidth: "100%" }}
+        style={{ width: SIDEBAR_WIDTH + layout.totalWidth, minWidth: "100%" }}
       >
         {/* Header row: the corner cell plus the time axis, pinned to the top. */}
         <div className="sticky top-0 z-[var(--z-sticky)] flex">
           <div
             className="sticky left-0 z-[var(--z-sticky)] shrink-0 border-b border-r border-line-strong bg-surface"
-            style={{ width: "var(--sidebar-width)", height: "var(--axis-height)" }}
+            style={{ width: SIDEBAR_WIDTH, height: "var(--axis-height)" }}
           >
             <div className="flex h-full items-end px-3 pb-2">
               <span className="text-micro uppercase text-ink-subtle">Lanes</span>
@@ -262,7 +359,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           {/* Lane and group names, pinned to the left. */}
           <div
             className="sticky left-0 z-[var(--z-sticky)] shrink-0 border-r border-line-strong bg-surface"
-            style={{ width: "var(--sidebar-width)", height: layout.totalHeight }}
+            style={{ width: SIDEBAR_WIDTH, height: layout.totalHeight }}
           >
             <LaneList doc={doc} layout={layout} readOnly={readOnly} />
           </div>
@@ -315,19 +412,29 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
               />
             ) : null}
 
+            {/*
+              Only cards intersecting the visible slice are mounted. Zoomed in
+              on a long timeline the document may hold thousands, and mounting
+              them all costs far more than the filter does.
+            */}
             {layout.lanes.flatMap((lane) =>
-              lane.items.map((placed) => (
-                <TimelineCard
-                  key={placed.item.id}
-                  placed={placed}
-                  selected={selectedItemId === placed.item.id}
-                  readOnly={readOnly}
-                  linkTarget={drag?.kind === "link" && drag.overItemId === placed.item.id}
-                  onSelect={(id) => select({ kind: "item", id })}
-                  onDragStart={onCardDragStart}
-                  onOpenInspector={(id) => select({ kind: "item", id })}
-                />
-              )),
+              lane.items
+                .filter(
+                  (placed) =>
+                    placed.x + Math.max(placed.width, 160) >= windowFromX && placed.x <= windowToX,
+                )
+                .map((placed) => (
+                  <TimelineCard
+                    key={placed.item.id}
+                    placed={placed}
+                    selected={selectedItemId === placed.item.id}
+                    readOnly={readOnly}
+                    linkTarget={drag?.kind === "link" && drag.overItemId === placed.item.id}
+                    onSelect={(id) => select({ kind: "item", id })}
+                    onDragStart={onCardDragStart}
+                    onOpenInspector={(id) => select({ kind: "item", id })}
+                  />
+                )),
             )}
 
             {createPreview ? (

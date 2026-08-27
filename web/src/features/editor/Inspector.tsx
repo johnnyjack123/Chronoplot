@@ -1,35 +1,56 @@
+import type { ReactNode } from "react";
 import type { Granularity, Precision, ThemeName, TimelineDoc } from "@shared";
 import { cn } from "@/lib/cn";
-import { formatWithPrecision, isValidIso, snapToPrecision } from "@/lib/dates";
+import { formatWithPrecision, snapToPrecision } from "@/lib/dates";
 import { commands, useEditorStore } from "@/state/editor-store";
 import { THEMES, useThemeStore } from "@/state/theme";
 import { Button, IconButton } from "@/components/ui/Button";
-import { DateInput, Field, Input, Textarea } from "@/components/ui/Field";
+import { Field, Input, Textarea } from "@/components/ui/Field";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Segmented, Select, Switch } from "@/components/ui/Controls";
 import { Tooltip } from "@/components/ui/Popover";
-import { CopyIcon, LinkIcon, TrashIcon } from "@/components/icons";
+import { CopyIcon, LinkIcon, TrashIcon, XIcon } from "@/components/icons";
 import { CARD_SLOTS, SLOT_NAMES, cardFill } from "@/features/timeline/colors";
 
 /*
- * The right-hand properties panel. What it shows follows the selection, and
- * with nothing selected it falls back to the timeline's own settings - so the
- * panel is never empty and there is never a separate "settings" mode to find.
+ * The right-hand panel.
+ *
+ * The timeline's own settings are the resting state - they are always what you
+ * fall back to. Selecting a card, lane or group lays that item's panel over the
+ * top, and its close button takes you straight back. Without that button a
+ * selection was a trap: nothing on screen returned you to the global settings.
  */
 export function Inspector({ doc, readOnly }: { doc: TimelineDoc; readOnly: boolean }) {
   const selection = useEditorStore((state) => state.selection);
+  const select = useEditorStore((state) => state.select);
 
-  const body = (() => {
+  const active = (() => {
     if (selection.kind === "item") {
       const item = doc.items.find((candidate) => candidate.id === selection.id);
-      return item ? <ItemInspector doc={doc} itemId={item.id} readOnly={readOnly} /> : null;
+      if (!item) return null;
+      return {
+        eyebrow: item.kind === "milestone" ? "Milestone" : "Card",
+        title: item.title || "Untitled",
+        body: <ItemInspector doc={doc} itemId={item.id} readOnly={readOnly} />,
+      };
     }
     if (selection.kind === "row") {
       const row = doc.rows.find((candidate) => candidate.id === selection.id);
-      return row ? <RowInspector doc={doc} rowId={row.id} readOnly={readOnly} /> : null;
+      if (!row) return null;
+      return {
+        eyebrow: "Lane",
+        title: row.title || "Untitled lane",
+        body: <RowInspector doc={doc} rowId={row.id} readOnly={readOnly} />,
+      };
     }
     if (selection.kind === "group") {
       const group = doc.groups.find((candidate) => candidate.id === selection.id);
-      return group ? <GroupInspector groupId={group.id} readOnly={readOnly} /> : null;
+      if (!group) return null;
+      return {
+        eyebrow: "Group",
+        title: group.title || "Untitled group",
+        body: <GroupInspector groupId={group.id} readOnly={readOnly} />,
+      };
     }
     return null;
   })();
@@ -39,15 +60,36 @@ export function Inspector({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
       className="flex shrink-0 flex-col overflow-y-auto border-l border-line bg-surface"
       style={{ width: "var(--inspector-width)" }}
     >
-      {body ?? <TimelineSettings doc={doc} readOnly={readOnly} />}
+      {active ? (
+        <>
+          <header className="sticky top-0 z-10 flex items-start gap-2 border-b border-line bg-surface px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-micro uppercase text-ink-subtle">{active.eyebrow}</p>
+              <h2 className="truncate-1 text-heading text-ink">{active.title}</h2>
+            </div>
+            <Tooltip content="Back to timeline settings (Esc)">
+              <IconButton
+                label="Close and show timeline settings"
+                size="sm"
+                onClick={() => select({ kind: "none" })}
+              >
+                <XIcon />
+              </IconButton>
+            </Tooltip>
+          </header>
+          {active.body}
+        </>
+      ) : (
+        <TimelineSettings doc={doc} readOnly={readOnly} />
+      )}
     </aside>
   );
 }
 
-function PanelSection({ title, children }: { title: string; children: React.ReactNode }) {
+function PanelSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3 border-b border-line px-4 py-4 last:border-b-0">
-      <h2 className="text-micro uppercase text-ink-subtle">{title}</h2>
+      <h3 className="text-micro uppercase text-ink-subtle">{title}</h3>
       {children}
     </section>
   );
@@ -73,7 +115,7 @@ function ItemInspector({
 
   return (
     <>
-      <PanelSection title={item.kind === "milestone" ? "Milestone" : "Card"}>
+      <PanelSection title="Details">
         <Field label="Title">
           {(props) => (
             <Input
@@ -153,19 +195,18 @@ function ItemInspector({
 
         <Field label={item.kind === "milestone" ? "Date" : "Start"}>
           {(props) => (
-            <DateInput
+            <DatePicker
               {...props}
               disabled={disabled}
               value={item.start}
+              precision={item.precision}
+              edge="start"
               min={doc.settings.start}
               max={doc.settings.end}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (!isValidIso(value)) return;
-                const start = snapToPrecision(value, item.precision, "start");
+              onChange={(next) => {
                 commands.updateItem(itemId, {
-                  start,
-                  ...(item.kind === "milestone" || item.end < start ? { end: start } : {}),
+                  start: next,
+                  ...(item.kind === "milestone" || item.end < next ? { end: next } : {}),
                 });
               }}
             />
@@ -175,19 +216,15 @@ function ItemInspector({
         {item.kind === "bar" ? (
           <Field label="End">
             {(props) => (
-              <DateInput
+              <DatePicker
                 {...props}
                 disabled={disabled}
                 value={item.end}
+                precision={item.precision}
+                edge="end"
                 min={item.start}
                 max={doc.settings.end}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  if (!isValidIso(value)) return;
-                  commands.updateItem(itemId, {
-                    end: snapToPrecision(value, item.precision, "end"),
-                  });
-                }}
+                onChange={(next) => commands.updateItem(itemId, { end: next })}
               />
             )}
           </Field>
@@ -233,7 +270,10 @@ function ItemInspector({
               const otherId = link.fromId === itemId ? link.toId : link.fromId;
               const other = doc.items.find((candidate) => candidate.id === otherId);
               return (
-                <li key={link.id} className="flex items-center gap-2 rounded-sm px-1 py-1 hover:bg-accent-soft/60">
+                <li
+                  key={link.id}
+                  className="flex items-center gap-2 rounded-sm px-1 py-1 hover:bg-accent-soft/60"
+                >
                   <LinkIcon className="size-3.5 shrink-0 text-ink-subtle" />
                   <button
                     type="button"
@@ -412,43 +452,50 @@ function GroupInspector({ groupId, readOnly }: { groupId: string; readOnly: bool
 /* -------------------------------------------------------------- settings -- */
 
 function TimelineSettings({ doc, readOnly }: { doc: TimelineDoc; readOnly: boolean }) {
-  const { setProjectTheme, override } = useThemeStore();
+  const { setProjectTheme, setOverride, override } = useThemeStore();
 
   return (
     <>
-      <PanelSection title="Timeline range">
+      <header className="sticky top-0 z-10 border-b border-line bg-surface px-4 py-3">
+        <p className="text-micro uppercase text-ink-subtle">Timeline</p>
+        <h2 className="text-heading text-ink">Settings</h2>
+      </header>
+
+      <PanelSection title="Range">
         <Field label="From">
           {(props) => (
-            <DateInput
+            <DatePicker
               {...props}
               disabled={readOnly}
               value={doc.settings.start}
-              onChange={(event) =>
-                isValidIso(event.target.value) &&
-                commands.updateSettings({ start: event.target.value })
-              }
+              edge="start"
+              max={doc.settings.end}
+              onChange={(start) => commands.updateSettings({ start })}
             />
           )}
         </Field>
         <Field label="To">
           {(props) => (
-            <DateInput
+            <DatePicker
               {...props}
               disabled={readOnly}
               value={doc.settings.end}
-              onChange={(event) =>
-                isValidIso(event.target.value) && commands.updateSettings({ end: event.target.value })
-              }
+              edge="end"
+              min={doc.settings.start}
+              onChange={(end) => commands.updateSettings({ end })}
             />
           )}
         </Field>
-        <Button disabled={readOnly || doc.items.length === 0} onClick={() => commands.fitWindowToItems()}>
+        <Button
+          disabled={readOnly || doc.items.length === 0}
+          onClick={() => commands.fitWindowToItems()}
+        >
           Fit to content
         </Button>
       </PanelSection>
 
       <PanelSection title="Axis">
-        <Field label="Ticks">
+        <Field label="Finest ticks" hint="Coarser units take over automatically as you zoom out.">
           {() => (
             <Segmented<Granularity>
               value={doc.settings.granularity}
@@ -474,7 +521,7 @@ function TimelineSettings({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
           checked={doc.settings.showWeekends}
           onChange={(showWeekends) => commands.updateSettings({ showWeekends })}
           label="Shade weekends"
-          hint="Only drawn when the axis ticks in days."
+          hint="Only drawn once days are wide enough to see."
         />
         <Switch
           checked={doc.settings.showLinks}
@@ -488,6 +535,13 @@ function TimelineSettings({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
           value={doc.settings.theme}
           onChange={(theme) => {
             commands.updateSettings({ theme });
+            /*
+             * Also drop any personal override. Choosing the project theme is a
+             * statement about how this timeline should look, and previously the
+             * override silently won - so the control appeared to do nothing at
+             * all for anyone who had ever used the theme switcher.
+             */
+            setOverride(null);
             setProjectTheme(theme);
           }}
           options={THEMES.map((theme) => ({
@@ -497,8 +551,8 @@ function TimelineSettings({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
           }))}
         />
         <p className="text-caption text-ink-subtle">
-          {override
-            ? "You are previewing a different theme locally. This setting is what everyone else sees."
+          {override && override !== doc.settings.theme
+            ? "You are previewing a different theme locally; picking one here applies it for everyone and clears your preview."
             : "Everyone who opens this project sees this theme."}
         </p>
       </PanelSection>

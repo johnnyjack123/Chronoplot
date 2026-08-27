@@ -1,6 +1,14 @@
-// End-to-end smoke test against a running Chronoplot API.
-const BASE = "http://localhost:5174";
-const ORIGIN = "http://localhost:5173";
+/*
+ * End-to-end smoke test against a running Chronoplot API.
+ *
+ *   node server/test/smoke.mjs                       # against `npm run dev`
+ *   BASE=http://localhost:5188 ORIGIN=http://localhost:5188 node server/test/smoke.mjs
+ *
+ * ORIGIN must match the server's APP_ORIGIN, because the origin check is one of
+ * the things under test.
+ */
+const BASE = process.env.BASE ?? "http://localhost:5174";
+const ORIGIN = process.env.ORIGIN ?? "http://localhost:5173";
 
 let cookies = new Map();
 const cookieHeader = () => [...cookies].map(([k, v]) => `${k}=${v}`).join("; ");

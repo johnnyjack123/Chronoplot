@@ -50,7 +50,8 @@ export function Toolbar({
   readOnly: boolean;
 }) {
   const navigate = useNavigate();
-  const { title, setTitle, unitsPerDay, setZoom, undo, redo, past, future } = useEditorStore();
+  const { title, setTitle, unitsPerDay, setZoom, zoomToFit, undo, redo, past, future } =
+    useEditorStore();
   const { status, message } = useSyncStore();
 
   return (
@@ -110,15 +111,20 @@ export function Toolbar({
       </Tooltip>
 
       <div className="ml-auto flex items-center gap-1">
-        <Tooltip content="Zoom out (Ctrl+−)">
+        <Tooltip content="Zoom out (Ctrl+−, or Ctrl+scroll)">
           <IconButton label="Zoom out" onClick={() => setZoom(unitsPerDay / ZOOM_FACTOR)}>
             <ZoomOutIcon />
           </IconButton>
         </Tooltip>
-        <Tooltip content="Zoom in (Ctrl++)">
+        <Tooltip content="Zoom in (Ctrl++, or Ctrl+scroll)">
           <IconButton label="Zoom in" onClick={() => setZoom(unitsPerDay * ZOOM_FACTOR)}>
             <ZoomInIcon />
           </IconButton>
+        </Tooltip>
+        <Tooltip content="Fit the whole timeline on screen (Ctrl+0)">
+          <Button size="sm" onClick={zoomToFit}>
+            Fit
+          </Button>
         </Tooltip>
 
         <div className="mx-1 h-5 w-px shrink-0 bg-line" />

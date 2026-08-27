@@ -9,9 +9,12 @@
 import { create } from "zustand";
 import { produce, type Draft } from "immer";
 import type { Item, Row, TimelineDoc } from "@shared";
-import { addDays, daysBetween, endOfMonth, endOfYear, startOfMonth, startOfYear, today } from "@/lib/dates";
+import { addDays, addYears, daysBetween, endOfMonth, endOfYear, startOfMonth, startOfYear, today } from "@/lib/dates";
+import { clampZoom, fitUnitsPerDay } from "@/features/timeline/geometry";
 
 const HISTORY_LIMIT = 100;
+/** Upper bound on how long a timeline may span. See `updateSettings`. */
+const MAX_SPAN_YEARS = 2000;
 /** Two edits sharing a coalesce key merge into one undo step within this window. */
 const COALESCE_WINDOW_MS = 900;
 
@@ -44,6 +47,8 @@ export interface EditorState {
   selection: Selection;
   /** Horizontal zoom, in pixels per day. */
   unitsPerDay: number;
+  /** Width of the plot area on screen, reported by the canvas. Drives "fit". */
+  plotWidth: number;
   /** Item id whose link is being dragged, if any. */
   linkingFrom: string | null;
 
@@ -68,6 +73,9 @@ export interface EditorState {
 
   select: (selection: Selection) => void;
   setZoom: (unitsPerDay: number) => void;
+  setPlotWidth: (width: number) => void;
+  /** Scales so the whole timeline fits the plot area. */
+  zoomToFit: () => void;
   setLinkingFrom: (id: string | null) => void;
 
   /** Called by the sync engine once the server has stored a version. */
@@ -90,6 +98,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   dirty: false,
   selection: { kind: "none" },
   unitsPerDay: 3,
+  plotWidth: 1000,
   linkingFrom: null,
 
   load: ({ projectId, title, doc, version, role }) =>
@@ -179,7 +188,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   canRedo: () => get().future.length > 0,
 
   select: (selection) => set({ selection }),
-  setZoom: (unitsPerDay) => set({ unitsPerDay: Math.min(40, Math.max(0.15, unitsPerDay)) }),
+  setZoom: (unitsPerDay) => set({ unitsPerDay: clampZoom(unitsPerDay) }),
+  setPlotWidth: (plotWidth) => set({ plotWidth }),
+
+  zoomToFit: () => {
+    const { doc, plotWidth } = get();
+    if (doc) set({ unitsPerDay: fitUnitsPerDay(doc, plotWidth) });
+  },
   setLinkingFrom: (linkingFrom) => set({ linkingFrom }),
 
   markSynced: (version) => set({ baseVersion: version, dirty: false }),
@@ -361,6 +376,11 @@ export const commands = {
       if (draft.settings.end < draft.settings.start) {
         draft.settings.end = draft.settings.start;
       }
+      // A safety net, not a product limit: two millennia is far beyond any real
+      // plan, and it stops a mistyped year from producing a document whose
+      // span makes every later calculation meaningless.
+      const ceiling = addYears(draft.settings.start, MAX_SPAN_YEARS);
+      if (draft.settings.end > ceiling) draft.settings.end = ceiling;
       // Items outside the new window would be invisible and unreachable, so
       // pull them back inside rather than silently losing them.
       for (const item of draft.items) {

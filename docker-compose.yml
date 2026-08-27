@@ -1,0 +1,50 @@
+# Chronoplot, ready to run:
+#
+#   SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d --build
+#
+# The server refuses to start in production without a SESSION_SECRET of at
+# least 32 characters, which is deliberate - a weak one means forgeable CSRF
+# tokens.
+
+services:
+  chronoplot:
+    build: .
+    image: chronoplot:latest
+    restart: unless-stopped
+    ports:
+      - "5174:5174"
+    environment:
+      NODE_ENV: production
+      PORT: 5174
+      # Where the browser reaches this instance. Must match exactly, including
+      # scheme and port - the origin check and the cookie scope both use it.
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:5174}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET, e.g. openssl rand -hex 32}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      DB_DRIVER: sqlite
+      DATABASE_URL: /data/chronoplot.sqlite
+    volumes:
+      # The database. Losing this volume loses every project, so back it up:
+      #   docker compose exec chronoplot node scripts/backup-db.mjs /data/chronoplot.sqlite
+      - chronoplot-data:/data
+
+  # Uncomment to run against Postgres instead. Only these two variables change;
+  # the schema is created on boot and no code differs.
+  #
+  # postgres:
+  #   image: postgres:17-alpine
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: chronoplot
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+  #     POSTGRES_DB: chronoplot
+  #   volumes:
+  #     - chronoplot-pg:/var/lib/postgresql/data
+  #
+  # Then on the chronoplot service:
+  #   DB_DRIVER: postgres
+  #   DATABASE_URL: postgres://chronoplot:${POSTGRES_PASSWORD}@postgres:5432/chronoplot
+
+volumes:
+  chronoplot-data:
+  # chronoplot-pg:

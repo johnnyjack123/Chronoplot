@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Timeline geometry - the single source of truth for where everything sits.
  *
  * Both renderers consume this module: the React canvas on screen and the PDF
@@ -11,7 +11,7 @@
  */
 import type { Granularity, Item, Precision, TimelineDoc } from "@shared";
 import {
-  addDays, addMonths, addYears, daysBetween, endOfMonth, endOfQuarter, endOfYear,
+  addDays, addMonths, addYears, clampDate, daysBetween, endOfMonth, endOfQuarter, endOfYear,
   formatMonth, inclusiveDays, isoWeekNumber, isWeekend, quarterOf, startOfMonth,
   startOfQuarter, startOfWeek, startOfYear, toIso, toTime, type IsoDate,
 } from "@/lib/dates";
@@ -37,6 +37,32 @@ export const DEFAULT_LAYOUT: LayoutOptions = {
   groupHeaderHeight: 28,
   groupGap: 12,
 };
+
+/**
+ * Must match `--sidebar-width` in tokens.css. The canvas needs it as a number
+ * to work out which slice of the plot is on screen, so it is applied from here
+ * rather than from CSS - that way the two cannot drift apart.
+ */
+export const SIDEBAR_WIDTH = 264;
+
+/*
+ * Zoom limits, in pixels per day.
+ *
+ * The lower bound is what decides how much history fits on one screen: at
+ * 0.0015 a full century is about 55px, so even a multi-century timeline can be
+ * taken in at a glance. The upper bound leaves a single day comfortably wide.
+ */
+export const MIN_UNITS_PER_DAY = 0.0015;
+export const MAX_UNITS_PER_DAY = 60;
+
+export const clampZoom = (value: number): number =>
+  Math.min(MAX_UNITS_PER_DAY, Math.max(MIN_UNITS_PER_DAY, value));
+
+/** The scale at which the whole timeline just fits the given width. */
+export function fitUnitsPerDay(doc: TimelineDoc, availableWidth: number): number {
+  const days = Math.max(1, inclusiveDays(doc.settings.start, doc.settings.end));
+  return clampZoom((availableWidth - 24) / days);
+}
 
 /* ------------------------------------------------------- horizontal axis -- */
 
@@ -82,9 +108,14 @@ export interface Axis {
   lower: Tick[];
   /** Positions where a major gridline is drawn (upper-tier boundaries). */
   majorLines: number[];
-  /** Shaded Saturday/Sunday spans; empty unless enabled at day granularity. */
+  /** Shaded Saturday/Sunday spans; empty unless days are wide enough to see. */
   weekendBands: { x: number; width: number }[];
+  /** Which units the two tiers ended up drawing, after zoom-based coarsening. */
+  units: { lower: TickUnit; upper: TickUnit };
 }
+
+/** Everything the axis can tick in, from finest to coarsest. */
+export type TickUnit = Granularity | "decade" | "century";
 
 type Stepper = {
   floor: (d: IsoDate) => IsoDate;
@@ -92,98 +123,208 @@ type Stepper = {
   /** Inclusive last day of the span starting at `d`. */
   endOf: (d: IsoDate) => IsoDate;
   label: (d: IsoDate) => string;
+  /** Approximate length, used to decide when a unit is too small to draw. */
+  approxDays: number;
+  /**
+   * Narrowest this unit may be drawn, in screen pixels. It tracks the width of
+   * the unit's own label - "15" needs far less room than "1990s" - so a single
+   * global threshold would either hide day numbers that fit or crowd year
+   * labels that do not.
+   */
+  minSize: number;
 };
 
-const STEPPERS: Record<Granularity | "decade", Stepper> = {
+const STEPPERS: Record<TickUnit, Stepper> = {
   day: {
     floor: (d) => d,
     next: (d) => addDays(d, 1),
     endOf: (d) => d,
     label: (d) => String(Number(d.slice(8, 10))),
+    approxDays: 1,
+    minSize: 18,
   },
   week: {
     floor: startOfWeek,
     next: (d) => addDays(d, 7),
     endOf: (d) => addDays(d, 6),
     label: (d) => `W${isoWeekNumber(d)}`,
+    approxDays: 7,
+    minSize: 20,
   },
   month: {
     floor: startOfMonth,
     next: (d) => addMonths(d, 1),
     endOf: endOfMonth,
     label: (d) => formatMonth(d),
+    approxDays: 30.44,
+    minSize: 34,
   },
   quarter: {
     floor: startOfQuarter,
     next: (d) => addMonths(d, 3),
     endOf: endOfQuarter,
     label: (d) => `Q${quarterOf(d)}`,
+    approxDays: 91.31,
+    minSize: 28,
   },
   year: {
     floor: startOfYear,
     next: (d) => addYears(d, 1),
     endOf: endOfYear,
     label: (d) => d.slice(0, 4),
+    approxDays: 365.25,
+    minSize: 38,
   },
   decade: {
     floor: (d) => `${String(Math.floor(Number(d.slice(0, 4)) / 10) * 10).padStart(4, "0")}-01-01`,
     next: (d) => addYears(d, 10),
     endOf: (d) => endOfYear(addYears(d, 9)),
     label: (d) => `${d.slice(0, 4)}s`,
+    approxDays: 3652.5,
+    minSize: 46,
+  },
+  century: {
+    floor: (d) => `${String(Math.floor(Number(d.slice(0, 4)) / 100) * 100).padStart(4, "0")}-01-01`,
+    next: (d) => addYears(d, 100),
+    endOf: (d) => endOfYear(addYears(d, 99)),
+    // "1900s" would read as a decade, so centuries are named the way people say
+    // them: 1900-1999 is the 20th century.
+    label: (d) => `${Math.floor(Number(d.slice(0, 4)) / 100) + 1}th c.`,
+    approxDays: 36_525,
+    minSize: 52,
   },
 };
 
-/** Which coarse unit sits above each fine unit in the two-tier header. */
-const UPPER_TIER: Record<Granularity, Granularity | "decade"> = {
-  day: "month",
-  week: "month",
-  month: "year",
-  quarter: "year",
-  year: "decade",
-};
+/** Finest to coarsest. Coarsening walks up this list. */
+const UNIT_ORDER: TickUnit[] = ["day", "week", "month", "quarter", "year", "decade", "century"];
+
+/**
+ * The unit actually drawn, given how far out the view is zoomed.
+ *
+ * The document's granularity is the *finest* unit the user wants to see, not a
+ * promise to draw it at any scale: at one pixel per year, day ticks would be
+ * tens of thousands of invisible gridlines. Coarsening until a tick is wide
+ * enough to be worth drawing is what keeps a century-long timeline responsive,
+ * and it is why the axis stays readable at every zoom level.
+ */
+export function effectiveUnits(
+  granularity: Granularity,
+  unitsPerDay: number,
+  /**
+   * Scales every unit's minimum width. Screen pixels use 1; the PDF exporter
+   * passes a smaller factor because it measures in millimetres.
+   */
+  sizeScale = 1,
+): { lower: TickUnit; upper: TickUnit } {
+  const startIndex = UNIT_ORDER.indexOf(granularity);
+  // The lower tier is capped below century so the upper tier always has a
+  // coarser unit available to sit above it.
+  const maxLower = UNIT_ORDER.length - 2;
+
+  let lowerIndex = startIndex;
+  while (lowerIndex < maxLower) {
+    const stepper = STEPPERS[UNIT_ORDER[lowerIndex]!]!;
+    if (stepper.approxDays * unitsPerDay >= stepper.minSize * sizeScale) break;
+    lowerIndex += 1;
+  }
+
+  // The upper tier is the next unit that is meaningfully coarser. Month over
+  // day reads well; quarter over month does not, so skip to year.
+  const preferredUpper: Record<TickUnit, TickUnit> = {
+    day: "month",
+    week: "month",
+    month: "year",
+    quarter: "year",
+    year: "decade",
+    decade: "century",
+    century: "century",
+  };
+
+  return { lower: UNIT_ORDER[lowerIndex]!, upper: preferredUpper[UNIT_ORDER[lowerIndex]!] };
+}
+
+/** The slice of the plot to build ticks for, in plot units from the left edge. */
+export interface AxisWindow {
+  fromX: number;
+  toX: number;
+}
 
 function buildTier(
   stepper: Stepper,
-  start: IsoDate,
-  end: IsoDate,
+  timelineStart: IsoDate,
+  timelineEnd: IsoDate,
+  visibleFrom: IsoDate,
+  visibleTo: IsoDate,
   unitsPerDay: number,
 ): Tick[] {
   const ticks: Tick[] = [];
-  let cursor = stepper.floor(start);
+  let cursor = stepper.floor(visibleFrom);
 
-  // Guard against a malformed stepper turning this into an infinite loop.
+  // Bounded by the window, so this loop runs a few hundred times at most. The
+  // guard only exists to contain a malformed stepper.
   let guard = 0;
-  while (cursor <= end && guard++ < 20_000) {
+  while (cursor <= visibleTo && guard++ < 5_000) {
     const spanEnd = stepper.endOf(cursor);
-    // Clip the first and last spans to the visible window so their labels stay
-    // centred over the part that is actually drawn.
-    const visibleStart = cursor < start ? start : cursor;
-    const visibleEnd = spanEnd > end ? end : spanEnd;
-    ticks.push({
-      date: cursor,
-      x: xOf(visibleStart, start, unitsPerDay),
-      width: widthOf(visibleStart, visibleEnd, unitsPerDay),
-      label: stepper.label(cursor),
-    });
-    cursor = stepper.next(cursor);
+    // Clip to the timeline so the first and last labels stay centred over the
+    // part that is actually drawn.
+    const clippedStart = cursor < timelineStart ? timelineStart : cursor;
+    const clippedEnd = spanEnd > timelineEnd ? timelineEnd : spanEnd;
+    if (clippedEnd >= clippedStart) {
+      ticks.push({
+        date: cursor,
+        x: xOf(clippedStart, timelineStart, unitsPerDay),
+        width: widthOf(clippedStart, clippedEnd, unitsPerDay),
+        label: stepper.label(cursor),
+      });
+    }
+    const next = stepper.next(cursor);
+    if (next <= cursor) break; // Refuse to spin if a stepper fails to advance.
+    cursor = next;
   }
   return ticks;
 }
 
-export function buildAxis(doc: TimelineDoc, unitsPerDay: number): Axis {
+/**
+ * Builds the axis for a window of the plot.
+ *
+ * Passing no window builds the whole thing, which is what the PDF exporter
+ * wants. The on-screen canvas passes the scrolled viewport, so the cost of
+ * drawing the axis depends on the size of the screen rather than on the length
+ * of the timeline.
+ */
+export function buildAxis(
+  doc: TimelineDoc,
+  unitsPerDay: number,
+  window?: AxisWindow,
+  sizeScale = 1,
+): Axis {
   const { start, end, granularity, showWeekends } = doc.settings;
+  const width = totalWidth(doc, unitsPerDay);
 
-  const lower = buildTier(STEPPERS[granularity], start, end, unitsPerDay);
-  const upper = buildTier(STEPPERS[UPPER_TIER[granularity]], start, end, unitsPerDay);
+  const fromX = Math.max(0, window ? window.fromX : 0);
+  const toX = Math.min(width, window ? window.toX : width);
 
+  const visibleFrom = clampDate(dateAtX(fromX, start, unitsPerDay), start, end);
+  const visibleTo = clampDate(dateAtX(toX, start, unitsPerDay), start, end);
+
+  const units = effectiveUnits(granularity, unitsPerDay, sizeScale);
+  const lower = buildTier(STEPPERS[units.lower], start, end, visibleFrom, visibleTo, unitsPerDay);
+  const upper = buildTier(STEPPERS[units.upper], start, end, visibleFrom, visibleTo, unitsPerDay);
+
+  /*
+   * Weekend shading is only drawn when a single day is wide enough to see. At
+   * anything coarser it is a smear of noise - and on a century-long timeline it
+   * would be tens of thousands of bands.
+   */
   const weekendBands: Axis["weekendBands"] = [];
-  // Only meaningful when individual days are distinguishable; at month scale a
-  // weekend band is a two-pixel smear that just adds noise.
-  if (showWeekends && granularity === "day") {
-    for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) {
+  if (showWeekends && unitsPerDay >= 3) {
+    let cursor = visibleFrom;
+    let guard = 0;
+    while (cursor <= visibleTo && guard++ < 5_000) {
       if (isWeekend(cursor)) {
         weekendBands.push({ x: xOf(cursor, start, unitsPerDay), width: unitsPerDay });
       }
+      cursor = addDays(cursor, 1);
     }
   }
 
@@ -192,6 +333,7 @@ export function buildAxis(doc: TimelineDoc, unitsPerDay: number): Axis {
     lower,
     majorLines: upper.map((tick) => tick.x).filter((x) => x > 0),
     weekendBands,
+    units,
   };
 }
 

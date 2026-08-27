@@ -5,6 +5,7 @@ build/
 .env
 .env.local
 data/
+backups/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

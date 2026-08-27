@@ -1,4 +1,4 @@
-/*
+﻿/*
  * PDF rendering.
  *
  * The timeline is *drawn* as vector shapes and real text, not captured as an
@@ -16,7 +16,7 @@ import { formatDate, today } from "@/lib/dates";
 import { buildAxis, layout as computeLayout, xOf } from "@/features/timeline/geometry";
 import { resolveCardHex, resolveCardInkHex, resolveToken } from "@/features/timeline/colors";
 import {
-  AXIS_HEIGHT, LANE_LABEL_WIDTH, MARGIN, PRINT_LAYOUT, pageBox, planPages,
+  AXIS_HEIGHT, LANE_LABEL_WIDTH, MARGIN, PRINT_LAYOUT, PRINT_TICK_SCALE, pageBox, planPages,
   type ExportOptions,
 } from "./pdf-plan";
 
@@ -138,7 +138,7 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
     const plotTop = MARGIN + AXIS_HEIGHT;
 
     const built = computeLayout(doc, { ...PRINT_LAYOUT, unitsPerDay: plan.mmPerDay });
-    const axis = buildAxis(doc, plan.mmPerDay);
+    const axis = buildAxis(doc, plan.mmPerDay, undefined, PRINT_TICK_SCALE);
 
     /*
      * The page is painted in the theme's own canvas colour rather than left
