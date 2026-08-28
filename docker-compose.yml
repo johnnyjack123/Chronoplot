@@ -24,8 +24,10 @@ services:
       DB_DRIVER: sqlite
       DATABASE_URL: /data/chronoplot.sqlite
     volumes:
-      # The database. Losing this volume loses every project, so back it up:
+      # The database, and the backups taken from inside the container. Losing
+      # this volume loses every project, so take a copy off it regularly:
       #   docker compose exec chronoplot node scripts/backup-db.mjs /data/chronoplot.sqlite
+      #   docker compose cp chronoplot:/data/backups ./backups
       - chronoplot-data:/data
 
   # Uncomment to run against Postgres instead. Only these two variables change;

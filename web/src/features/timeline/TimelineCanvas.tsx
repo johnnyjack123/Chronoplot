@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 import { addDays, clampDate, daysBetween, snapToPrecision, today } from "@/lib/dates";
 import { commands, useEditorStore } from "@/state/editor-store";
 import { IconButton } from "@/components/ui/Button";
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from "@/components/icons";
+import { ChevronDownIcon, ChevronRightIcon, GripIcon, PlusIcon } from "@/components/icons";
 import { PlotBackground, TimeAxis } from "./Axis";
 import { LinkLayer, PendingLink } from "./Links";
 import { TimelineCard, type DragMode } from "./TimelineCard";
@@ -43,6 +43,15 @@ type DragState =
  * never reaches un-rendered space before the next frame fills it in.
  */
 const OVERSCAN = 900;
+
+/**
+ * Scrollable space past the end of the timeline.
+ *
+ * Without it the last day sits flush against the panel on the right, and the
+ * labels that narrow cards and milestones draw *beside* themselves are clipped
+ * with nowhere to scroll to.
+ */
+const END_GUTTER = 180;
 
 export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: boolean }) {
   const unitsPerDay = useEditorStore((state) => state.unitsPerDay);
@@ -340,7 +349,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
     <div ref={scrollRef} onWheel={onWheel} className="relative flex-1 overflow-auto bg-sunken">
       <div
         className="relative"
-        style={{ width: SIDEBAR_WIDTH + layout.totalWidth, minWidth: "100%" }}
+        style={{ width: SIDEBAR_WIDTH + layout.totalWidth + END_GUTTER, minWidth: "100%" }}
       >
         {/* Header row: the corner cell plus the time axis, pinned to the top. */}
         <div className="sticky top-0 z-[var(--z-sticky)] flex">
@@ -475,6 +484,27 @@ function TodayMarker({ x, height }: { x: number; height: number }) {
 
 /* --------------------------------------------------------------- sidebar -- */
 
+/**
+ * Where a dragged lane or group would land. Slots sit at the boundaries between
+ * rendered lanes rather than on them, because a drop means "go between these
+ * two", not "replace this one".
+ */
+interface DropSlot {
+  y: number;
+  groupId: string | null;
+  /** The lane to land in front of, or null for last in that group. */
+  beforeRowId: string | null;
+}
+
+interface GroupSlot {
+  y: number;
+  beforeGroupId: string | null;
+}
+
+type SidebarDrag =
+  | { kind: "row"; id: string; slot: DropSlot | null }
+  | { kind: "group"; id: string; slot: GroupSlot | null };
+
 function LaneList({
   doc,
   layout,
@@ -487,14 +517,124 @@ function LaneList({
   const selection = useEditorStore((state) => state.selection);
   const select = useEditorStore((state) => state.select);
 
+  const listRef = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState<SidebarDrag | null>(null);
+
+  /*
+   * Drop targets for lanes. A collapsed group is deliberately not a target:
+   * dropping into one would make the lane vanish, which reads as data loss even
+   * though nothing was lost.
+   */
+  const rowSlots = useMemo<DropSlot[]>(() => {
+    const slots: DropSlot[] = [];
+    const contexts: (string | null)[] = [
+      null,
+      ...doc.groups.filter((group) => !group.collapsed).map((group) => group.id),
+    ];
+
+    for (const context of contexts) {
+      const lanes = layout.lanes.filter((lane) => lane.groupId === context);
+      for (const lane of lanes) {
+        slots.push({ y: lane.y, groupId: context, beforeRowId: lane.rowId });
+      }
+      const last = lanes[lanes.length - 1];
+      if (last) {
+        slots.push({ y: last.y + last.height, groupId: context, beforeRowId: null });
+      } else if (context === null) {
+        slots.push({ y: 0, groupId: null, beforeRowId: null });
+      } else {
+        // An empty group still needs somewhere to drop into.
+        const placed = layout.groups.find((group) => group.groupId === context);
+        if (placed) slots.push({ y: placed.y + placed.height, groupId: context, beforeRowId: null });
+      }
+    }
+    return slots;
+  }, [doc.groups, layout.groups, layout.lanes]);
+
+  const groupSlots = useMemo<GroupSlot[]>(() => {
+    const slots: GroupSlot[] = layout.groups.map((group) => ({
+      y: group.y,
+      beforeGroupId: group.groupId,
+    }));
+    const last = layout.groups[layout.groups.length - 1];
+    if (last) slots.push({ y: last.y + last.height, beforeGroupId: null });
+    return slots;
+  }, [layout.groups]);
+
+  const localY = (clientY: number): number =>
+    clientY - (listRef.current?.getBoundingClientRect().top ?? 0);
+
+  const nearest = <T extends { y: number }>(slots: T[], y: number): T | null =>
+    slots.reduce<T | null>(
+      (best, slot) => (best === null || Math.abs(slot.y - y) < Math.abs(best.y - y) ? slot : best),
+      null,
+    );
+
+  const startDrag = (kind: "row" | "group", id: string) => (event: ReactPointerEvent) => {
+    if (readOnly || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    listRef.current?.setPointerCapture(event.pointerId);
+    setDrag({ kind, id, slot: null } as SidebarDrag);
+  };
+
+  const onPointerMove = (event: ReactPointerEvent): void => {
+    if (!drag) return;
+    const y = localY(event.clientY);
+    setDrag(
+      drag.kind === "row"
+        ? { ...drag, slot: nearest(rowSlots, y) }
+        : { ...drag, slot: nearest(groupSlots, y) },
+    );
+  };
+
+  const onPointerUp = (event: ReactPointerEvent): void => {
+    if (!drag) return;
+    listRef.current?.releasePointerCapture(event.pointerId);
+
+    if (drag.kind === "row" && drag.slot) {
+      commands.reorderRow(drag.id, drag.slot.groupId, drag.slot.beforeRowId);
+    } else if (drag.kind === "group" && drag.slot) {
+      commands.reorderGroup(drag.id, drag.slot.beforeGroupId);
+    }
+    setDrag(null);
+  };
+
+  const gripClass = cn(
+    "flex size-5 shrink-0 cursor-grab items-center justify-center rounded-sm text-ink-subtle",
+    "opacity-0 transition-opacity duration-[var(--dur-fast)]",
+    "hover:bg-accent-soft hover:text-ink group-hover/row:opacity-100 focus-visible:opacity-100",
+    "active:cursor-grabbing",
+  );
+
   return (
-    <>
+    <div
+      ref={listRef}
+      className="relative h-full touch-none"
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
       {layout.groups.map((group) => (
         <div
           key={group.groupId}
-          className="absolute left-0 right-0 flex items-center gap-1 border-b border-line px-2"
+          className={cn(
+            "group/row absolute left-0 right-0 flex items-center gap-1 border-b border-line px-2",
+            drag?.kind === "group" && drag.id === group.groupId && "opacity-40",
+          )}
           style={{ top: group.y, height: layout.options.groupHeaderHeight }}
         >
+          {!readOnly ? (
+            <span
+              role="button"
+              tabIndex={-1}
+              aria-label={`Reorder ${group.title}`}
+              onPointerDown={startDrag("group", group.groupId)}
+              className={gripClass}
+            >
+              <GripIcon className="size-3" />
+            </span>
+          ) : null}
           <IconButton
             label={group.collapsed ? `Expand ${group.title}` : `Collapse ${group.title}`}
             size="sm"
@@ -538,15 +678,29 @@ function LaneList({
         return (
           <div
             key={lane.rowId}
-            className="absolute left-0 right-0 flex items-center border-b border-line"
+            className={cn(
+              "group/row absolute left-0 right-0 flex items-center gap-1 border-b border-line pl-1.5",
+              indented && "pl-5",
+              drag?.kind === "row" && drag.id === lane.rowId && "opacity-40",
+            )}
             style={{ top: lane.y, height: lane.height }}
           >
+            {!readOnly ? (
+              <span
+                role="button"
+                tabIndex={-1}
+                aria-label={`Reorder ${lane.title}`}
+                onPointerDown={startDrag("row", lane.rowId)}
+                className={gripClass}
+              >
+                <GripIcon className="size-3.5" />
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={() => select({ kind: "row", id: lane.rowId })}
               className={cn(
-                "mx-2 min-w-0 flex-1 truncate-1 rounded-sm px-1.5 py-1 text-left text-label",
-                indented && "ml-6",
+                "min-w-0 flex-1 truncate-1 rounded-sm px-1.5 py-1 text-left text-label",
                 selected ? "bg-accent-soft text-accent" : "text-ink hover:bg-accent-soft/60",
               )}
             >
@@ -559,9 +713,20 @@ function LaneList({
         );
       })}
 
+      {/* Where the drag would land. */}
+      {drag?.slot ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-0 right-0 z-10 h-0.5 -translate-y-px bg-accent"
+          style={{ top: drag.slot.y }}
+        >
+          <span className="absolute -left-0.5 -top-1 size-2.5 rounded-full bg-accent" />
+        </div>
+      ) : null}
+
       {layout.lanes.length === 0 && doc.groups.length === 0 ? (
         <p className="px-3 py-4 text-caption text-ink-subtle">No lanes yet.</p>
       ) : null}
-    </>
+    </div>
   );
 }

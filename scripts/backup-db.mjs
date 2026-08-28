@@ -7,6 +7,10 @@
  * and works safely while the server is running.
  *
  * Usage:  node scripts/backup-db.mjs [path/to/database.sqlite]
+ *
+ * Backups go to `backups/` next to the repo, or to CHRONOPLOT_BACKUP_DIR when
+ * set - in a container the repo directory is not writable by the app user, and
+ * a backup written inside the image would vanish with the container anyway.
  */
 import Database from "better-sqlite3";
 import { mkdirSync, statSync } from "node:fs";
@@ -17,7 +21,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const source = resolve(repoRoot, process.argv[2] ?? "data/chronoplot.sqlite");
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-const backupDir = resolve(repoRoot, "backups");
+const backupDir = process.env.CHRONOPLOT_BACKUP_DIR
+  ? resolve(process.env.CHRONOPLOT_BACKUP_DIR)
+  : resolve(repoRoot, "backups");
 const target = resolve(backupDir, `chronoplot_${stamp}.sqlite`);
 
 mkdirSync(backupDir, { recursive: true });

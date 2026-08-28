@@ -245,12 +245,57 @@ export const commands = {
     });
   },
 
-  moveRow(rowId: string, toIndex: number): void {
+  /**
+   * Moves a lane to a new place in the visual order, possibly into or out of a
+   * group, in one step.
+   *
+   * The rendered order is "ungrouped rows first, then each group's rows", both
+   * in array order - so a plain array index is not the same thing as a position
+   * on screen. Rather than trying to compute the right index, this rebuilds the
+   * array in the order the screen shows, which is unambiguous and makes the
+   * same-group case fall out for free.
+   *
+   * `beforeRowId` is the lane to land in front of, or null to go last in the
+   * target group.
+   */
+  reorderRow(rowId: string, targetGroupId: string | null, beforeRowId: string | null): void {
+    if (rowId === beforeRowId) return;
+
     useEditorStore.getState().mutate((draft) => {
-      const from = draft.rows.findIndex((row) => row.id === rowId);
-      if (from === -1) return;
-      const [row] = draft.rows.splice(from, 1);
-      if (row) draft.rows.splice(Math.max(0, Math.min(draft.rows.length, toIndex)), 0, row);
+      const moving = draft.rows.find((row) => row.id === rowId);
+      if (!moving) return;
+      if (targetGroupId !== null && !draft.groups.some((group) => group.id === targetGroupId)) return;
+
+      const rest = draft.rows.filter((row) => row.id !== rowId);
+      moving.groupId = targetGroupId;
+
+      const inTarget = rest.filter((row) => row.groupId === targetGroupId);
+      const at = beforeRowId === null ? inTarget.length : inTarget.findIndex((row) => row.id === beforeRowId);
+      inTarget.splice(at === -1 ? inTarget.length : at, 0, moving);
+
+      // Reassemble in render order so the array and the screen always agree.
+      const ordered = [
+        ...(targetGroupId === null ? inTarget : rest.filter((row) => row.groupId === null)),
+      ];
+      for (const group of draft.groups) {
+        ordered.push(...(group.id === targetGroupId ? inTarget : rest.filter((row) => row.groupId === group.id)));
+      }
+      draft.rows = ordered;
+    });
+  },
+
+  /** Moves a group before another, or to the end when `beforeGroupId` is null. */
+  reorderGroup(groupId: string, beforeGroupId: string | null): void {
+    if (groupId === beforeGroupId) return;
+
+    useEditorStore.getState().mutate((draft) => {
+      const moving = draft.groups.find((group) => group.id === groupId);
+      if (!moving) return;
+
+      const rest = draft.groups.filter((group) => group.id !== groupId);
+      const at = beforeGroupId === null ? rest.length : rest.findIndex((group) => group.id === beforeGroupId);
+      rest.splice(at === -1 ? rest.length : at, 0, moving);
+      draft.groups = rest;
     });
   },
 

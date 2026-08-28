@@ -119,6 +119,7 @@ fresh one.
 node server/test/smoke.mjs                                        # needs the server running
 npx tsx --tsconfig web/tsconfig.json web/test/dates.test.ts       # calendar maths
 npx tsx --tsconfig web/tsconfig.json web/test/axis.test.ts        # axis windowing + zoom
+npx tsx --tsconfig web/tsconfig.json web/test/reorder.test.ts     # lane and group ordering
 npx tsx --tsconfig web/tsconfig.json web/test/pdf-plan.test.ts    # pagination
 ```
 
@@ -156,9 +157,12 @@ everyone; a viewer can override it locally without changing the project.
 | `←` / `→` | Nudge by a day (`Shift` for a week) |
 | `Ctrl+` `+` / `-` | Zoom, or `Ctrl`+scroll to zoom around the pointer |
 | `Ctrl+0` | Fit the whole timeline on screen |
+| `Alt+↑` / `Alt+↓` | Reorder the selected lane or group |
 | `Esc` | Clear the selection, back to timeline settings |
 
 Drag across an empty lane to create a card; a single click makes a milestone.
+Drag a lane by its grip handle to reorder it, or into and out of a group;
+groups reorder the same way.
 
 The axis picks its own units as you zoom: the granularity setting is the
 *finest* unit you want to see, and coarser ones take over on the way out. A

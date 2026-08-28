@@ -32,13 +32,19 @@ COPY . .
 RUN npm run build \
  && npm prune --omit=dev
 
+# The runtime stage copies only the hoisted root node_modules. That is correct
+# for this lockfile, but it would break silently if npm ever nested a runtime
+# package inside a workspace - so fail the build here instead of at boot.
+RUN node -e "['fastify','@fastify/cookie','@fastify/static','@fastify/rate-limit','better-sqlite3','@node-rs/argon2','dotenv','zod','postgres'].forEach((m) => require.resolve(m))"
+
 # -------------------------------------------------------------- runtime ----
 FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     PORT=5174 \
     DB_DRIVER=sqlite \
-    DATABASE_URL=/data/chronoplot.sqlite
+    DATABASE_URL=/data/chronoplot.sqlite \
+    CHRONOPLOT_BACKUP_DIR=/data/backups
 
 WORKDIR /app
 
@@ -53,9 +59,12 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/server/package.json ./server/package.json
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/web/dist ./web/dist
+# Ships with the image so backups can be taken from a running container:
+#   docker compose exec chronoplot node scripts/backup-db.mjs $DATABASE_URL
+COPY --from=build /app/scripts ./scripts
 
 # The database lives on a volume, never inside the image layer.
-RUN mkdir -p /data && chown -R node:node /data
+RUN mkdir -p /data/backups && chown -R node:node /data
 VOLUME ["/data"]
 
 USER node

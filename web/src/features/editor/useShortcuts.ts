@@ -95,6 +95,53 @@ export function useShortcuts(enabled: boolean): void {
         }
       }
 
+      /*
+       * Alt + arrow reorders the selected lane or group. Dragging is the
+       * obvious way to do this, but it is also the only way unless something
+       * like this exists - and reordering is not an operation that should
+       * require a pointer.
+       */
+      if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        const doc = store.doc;
+        if (!doc) return;
+        const direction = event.key === "ArrowUp" ? -1 : 1;
+
+        if (store.selection.kind === "row") {
+          const rowId = store.selection.id;
+          const row = doc.rows.find((candidate) => candidate.id === rowId);
+          if (!row) return;
+          event.preventDefault();
+
+          // Move within the lane's own group, since a keystroke should not
+          // silently re-parent it.
+          const siblings = doc.rows.filter((candidate) => candidate.groupId === row.groupId);
+          const index = siblings.findIndex((candidate) => candidate.id === rowId);
+          const target = index + direction;
+          if (target < 0 || target >= siblings.length) return;
+
+          commands.reorderRow(
+            rowId,
+            row.groupId,
+            direction === -1 ? (siblings[target]?.id ?? null) : (siblings[target + 1]?.id ?? null),
+          );
+          return;
+        }
+
+        if (store.selection.kind === "group") {
+          const groupId = store.selection.id;
+          const index = doc.groups.findIndex((candidate) => candidate.id === groupId);
+          const target = index + direction;
+          if (index === -1 || target < 0 || target >= doc.groups.length) return;
+          event.preventDefault();
+
+          commands.reorderGroup(
+            groupId,
+            direction === -1 ? (doc.groups[target]?.id ?? null) : (doc.groups[target + 1]?.id ?? null),
+          );
+          return;
+        }
+      }
+
       if (event.key === "Escape") {
         store.select({ kind: "none" });
       }
