@@ -159,10 +159,14 @@ jobs:
           cache-from: type=gha,scope=${{ steps.image.outputs.slug }}
           cache-to: type=gha,mode=max,scope=${{ steps.image.outputs.slug }}
 
+      # The file is named after the digest, with the `sha256:` prefix stripped:
+      # upload-artifact rejects any path containing a colon, because it is not a
+      # legal filename on Windows. The manifest job puts the prefix back.
       - name: Record the digest
         run: |
           mkdir -p /tmp/digests
-          touch "/tmp/digests/${{ steps.build.outputs.digest }}"
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
 
       - uses: actions/upload-artifact@v4
         with:
