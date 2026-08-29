@@ -60,7 +60,7 @@ export function resolveCardInkHex(slot: number, root: HTMLElement = document.doc
  * slots, so if the wash were anywhere near as saturated as a card the two would
  * compete and the cards would stop reading as the foreground.
  */
-export const LANE_TINT_STRENGTH = 0.14;
+export const LANE_TINT_STRENGTH = 0.24;
 
 export function laneTint(slot: number | undefined): string | undefined {
   if (slot === undefined) return undefined;

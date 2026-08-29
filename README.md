@@ -75,9 +75,9 @@ in a note with an `<iframe>`:
 ```
 
 The path is relative to the vault root. Obsidian renders raw HTML in reading
-view, so switch out of source mode to see it; drag to pan, scroll to zoom, hover
-a card for its exact dates. Re-exporting over the same filename updates every
-note that embeds it.
+view, so switch out of source mode to see it. Drag or scroll to pan — a trackpad
+scrolls sideways too — `Ctrl`+scroll to zoom, and hover a card for its exact
+dates. Re-exporting over the same filename updates every note that embeds it.
 
 On a website it is the same tag, or just serve the file directly — it has no
 dependencies and sets no cookies.
@@ -108,10 +108,19 @@ node scripts/make-admin.mjs you@example.com --only   # and demote the rest
 
 ### Moving a project between instances
 
-Export writes a `.chronoplot.json` file — the timeline document and nothing
-else, no accounts and no sharing. Import it on the other instance from the
-dashboard. The file is validated before it is sent, so a truncated or foreign
-file is refused with a readable message rather than a 422.
+The export dialog's third format writes a `.chronoplot.json` file — the timeline
+document and nothing else, no accounts and no sharing. Import it on the other
+instance from the dashboard. The file is validated before it is sent, so a
+truncated or foreign file is refused with a readable message rather than a 422.
+
+### PDF scale
+
+The presets set the horizontal scale only; **Custom** exposes both axes. The
+horizontal slider is exponential, because usable scales span more than two
+hundredfold and a linear one would bury the useful range in a few pixels of
+travel. The vertical slider multiplies lane and bar heights without touching
+text size — it makes rows roomier, not the type bigger. The page count updates
+as you drag.
 
 ### Docker
 

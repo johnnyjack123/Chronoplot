@@ -186,8 +186,9 @@ export const AlertIcon = (p: IconProps) => (
  */
 export const MagnetIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M2.75 13.25V7.5a5.25 5.25 0 0 1 10.5 0v5.75" />
-    <path d="M6.25 13.25V7.5a1.75 1.75 0 0 1 3.5 0v5.75" />
+    {/* Outer and inner arcs, closed across the bottom so each pole reads as a
+        solid tip rather than an open-ended pair of lines. */}
+    <path d="M2.75 13.25V7.5a5.25 5.25 0 0 1 10.5 0v5.75h-3.5V7.5a1.75 1.75 0 0 0-3.5 0v5.75Z" />
     <path d="M2.75 10.75h3.5M9.75 10.75h3.5" />
   </Icon>
 );

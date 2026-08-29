@@ -38,6 +38,7 @@ const baseOptions: ExportOptions = {
   pageSize: "a4",
   orientation: "landscape",
   mmPerDay: null,
+  verticalScale: 1,
   theme: "daylight",
   title: "Test",
   repeatLaneLabels: true,
@@ -131,6 +132,41 @@ const baseOptions: ExportOptions = {
     without.columns.length <= withLabels.columns.length,
     `${without.columns.length} vs ${withLabels.columns.length}`,
   );
+}
+
+/* 8. Vertical scale. The presets only ever changed the horizontal scale, so a
+ *    "detailed" export spread sideways but stayed just as cramped top to
+ *    bottom. Scaling vertically has to actually change the plot's height. */
+{
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    id: `r${index}`,
+    groupId: null,
+    title: `Lane ${index}`,
+  }));
+
+  const normal = planPages(makeDoc({ rows }), baseOptions);
+  const tall = planPages(makeDoc({ rows }), { ...baseOptions, verticalScale: 2.5 });
+  const short = planPages(makeDoc({ rows }), { ...baseOptions, verticalScale: 0.5 });
+
+  check("a larger vertical scale makes the plot taller", tall.plotHeight > normal.plotHeight * 2,
+    `${short.plotHeight} / ${normal.plotHeight} / ${tall.plotHeight}`);
+  check("a smaller vertical scale makes it shorter", short.plotHeight < normal.plotHeight);
+  check("the vertical scale does not change the width", tall.plotWidth === normal.plotWidth);
+  check("a taller plot needs at least as many pages down", tall.rows.length >= normal.rows.length,
+    `${tall.rows.length} vs ${normal.rows.length}`);
+
+  // Out-of-range values are clamped rather than producing a broken layout.
+  const absurd = planPages(makeDoc({ rows }), { ...baseOptions, verticalScale: 99 });
+  check("an absurd vertical scale is clamped", absurd.plotHeight <= normal.plotHeight * 4.01,
+    `${absurd.plotHeight} vs ${normal.plotHeight}`);
+}
+
+/* 9. Custom horizontal scale drives the page count. */
+{
+  const wide = planPages(makeDoc(), { ...baseOptions, mmPerDay: 4 });
+  const narrow = planPages(makeDoc(), { ...baseOptions, mmPerDay: 0.4 });
+  check("a wider scale needs more pages across", wide.columns.length > narrow.columns.length,
+    `${wide.columns.length} vs ${narrow.columns.length}`);
 }
 
 console.log(failed === 0 ? "\nAll pagination checks passed" : `\n${failed} check(s) failed`);

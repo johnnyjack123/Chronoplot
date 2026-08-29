@@ -10,12 +10,12 @@ import { Field, Input } from "@/components/ui/Field";
 import { Tooltip } from "@/components/ui/Popover";
 import { ThemeSwitcher } from "@/features/theme/ThemeSwitcher";
 import {
-  BarIcon, ChronoplotMark, DownloadIcon, LogOutIcon, PlusIcon, ShareIcon, ShieldIcon,
+  BarIcon, ChronoplotMark, LogOutIcon, PlusIcon, ShareIcon, ShieldIcon,
   TrashIcon, UploadIcon,
 } from "@/components/icons";
 import { AccountDialog } from "@/features/account/AccountDialog";
 import { AdminDialog } from "@/features/admin/AdminDialog";
-import { downloadProjectFile, parseProjectFile } from "./project-file";
+import { parseProjectFile } from "./project-file";
 
 const relativeTime = (timestamp: number): string => {
   const seconds = Math.round((Date.now() - timestamp) / 1000);
@@ -93,17 +93,6 @@ export function ProjectsPage() {
       );
     } finally {
       setBusy(false);
-    }
-  };
-
-  const exportProject = async (project: ProjectSummary): Promise<void> => {
-    setError(null);
-    try {
-      // The list only carries a summary, so fetch the document itself.
-      const { project: full } = await api.getProject(project.id);
-      downloadProjectFile(full.title, full.doc, user?.name);
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "Could not export that project.");
     }
   };
 
@@ -260,24 +249,18 @@ export function ProjectsPage() {
                       )}
                     </span>
 
-                    {/* These sit above the card-wide click target. */}
-                    <span className="relative z-10 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                      <Tooltip content="Export as a project file">
-                        <IconButton
-                          label={`Export ${project.title}`}
-                          size="sm"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void exportProject(project);
-                          }}
-                        >
-                          <DownloadIcon />
-                        </IconButton>
-                      </Tooltip>
-                      {project.role === "owner" ? (
+                    {/*
+                      Exporting lives in the editor's export dialog, alongside
+                      PDF and HTML - one place that answers "get this out of
+                      here", rather than two that each do part of it.
+                    */}
+                    {project.role === "owner" ? (
+                      <Tooltip content={`Delete ${project.title}`}>
                         <IconButton
                           label={`Delete ${project.title}`}
                           size="sm"
+                          // Sits above the card-wide click target.
+                          className="relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                           onClick={(event) => {
                             event.stopPropagation();
                             setPendingDelete(project);
@@ -285,8 +268,8 @@ export function ProjectsPage() {
                         >
                           <TrashIcon />
                         </IconButton>
-                      ) : null}
-                    </span>
+                      </Tooltip>
+                    ) : null}
                   </div>
                 </div>
               </li>

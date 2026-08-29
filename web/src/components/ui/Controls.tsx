@@ -31,6 +31,8 @@ export function Segmented<T extends string>({
   className?: string;
   size?: "sm" | "md";
 }) {
+  // `title` is safe here: a Segmented option is never separately wrapped in a
+  // Tooltip, so there is nothing for the browser's own to collide with.
   return (
     <div
       role="radiogroup"

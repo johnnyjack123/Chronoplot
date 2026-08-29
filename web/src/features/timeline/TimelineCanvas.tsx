@@ -66,6 +66,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
   const snapping = useEditorStore((state) => state.snapping);
   const editingId = useEditorStore((state) => state.editingId);
   const viewCommand = useEditorStore((state) => state.viewCommand);
+  const projectId = useEditorStore((state) => state.projectId);
 
   const plotRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -410,6 +411,30 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
    */
   const docRef = useRef(doc);
   docRef.current = doc;
+
+  /*
+   * Open on the whole timeline.
+   *
+   * Landing at whatever zoom the previous project happened to use, scrolled to
+   * wherever it was left, tells you nothing about the plan you just opened.
+   * Done without animation - there is no previous view to animate away from -
+   * and once per project, so it never fights a zoom you set yourself.
+   */
+  const fittedProject = useRef<string | null>(null);
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !projectId || fittedProject.current === projectId) return;
+
+    fittedProject.current = projectId;
+    // A frame later, so the container has been laid out and measured.
+    const frame = requestAnimationFrame(() => {
+      const available = Math.max(200, container.clientWidth - SIDEBAR_WIDTH);
+      useEditorStore.getState().setZoom(fitUnitsPerDay(docRef.current, available));
+      container.scrollLeft = 0;
+      container.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [projectId]);
 
   useEffect(() => {
     if (!viewCommand) return;
@@ -881,14 +906,16 @@ function LaneList({
               <GripIcon className="size-3" />
             </span>
           ) : null}
-          <IconButton
-            label={group.collapsed ? `Expand ${group.title}` : `Collapse ${group.title}`}
-            size="sm"
-            className="size-6"
-            onClick={() => commands.toggleGroup(group.groupId)}
-          >
-            {group.collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
-          </IconButton>
+          <Tooltip content={group.collapsed ? "Expand this group" : "Collapse this group"}>
+            <IconButton
+              label={group.collapsed ? `Expand ${group.title}` : `Collapse ${group.title}`}
+              size="sm"
+              className="size-6"
+              onClick={() => commands.toggleGroup(group.groupId)}
+            >
+              {group.collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
+            </IconButton>
+          </Tooltip>
           {editingId === group.groupId ? (
             <InlineName
               value={group.title}
@@ -914,14 +941,16 @@ function LaneList({
               {group.laneCount}
             </span>
           ) : !readOnly ? (
-            <IconButton
-              label={`Add lane to ${group.title}`}
-              size="sm"
-              className="size-6"
-              onClick={() => commands.addRowToGroup(group.groupId)}
-            >
-              <PlusIcon />
-            </IconButton>
+            <Tooltip content={`Add a lane to ${group.title}`}>
+              <IconButton
+                label={`Add lane to ${group.title}`}
+                size="sm"
+                className="size-6"
+                onClick={() => commands.addRowToGroup(group.groupId)}
+              >
+                <PlusIcon />
+              </IconButton>
+            </Tooltip>
           ) : null}
         </div>
       ))}

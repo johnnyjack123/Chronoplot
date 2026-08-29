@@ -88,7 +88,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     <button
       ref={ref}
       aria-label={label}
-      title={label}
+      /*
+       * Deliberately no `title`. The browser renders its own tooltip from it,
+       * which appeared on top of the styled one wherever a Tooltip wrapped this
+       * button - two tooltips for one control. `aria-label` carries the name for
+       * assistive technology; a Tooltip carries it for everyone else.
+       */
       aria-pressed={active}
       className={cn(
         "inline-flex shrink-0 items-center justify-center",

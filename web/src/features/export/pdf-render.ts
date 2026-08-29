@@ -18,7 +18,7 @@ import {
   LANE_TINT_STRENGTH, resolveCardHex, resolveCardInkHex, resolveToken,
 } from "@/features/timeline/colors";
 import {
-  AXIS_HEIGHT, LANE_LABEL_WIDTH, MARGIN, PRINT_LAYOUT, PRINT_TICK_SCALE, pageBox, planPages,
+  AXIS_HEIGHT, LANE_LABEL_WIDTH, MARGIN, PRINT_TICK_SCALE, pageBox, planPages, printLayout,
   type ExportOptions,
 } from "./pdf-plan";
 
@@ -147,7 +147,10 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
     const plotLeft = MARGIN + labelWidth;
     const plotTop = MARGIN + AXIS_HEIGHT;
 
-    const built = computeLayout(doc, { ...PRINT_LAYOUT, unitsPerDay: plan.mmPerDay });
+    const built = computeLayout(doc, {
+      ...printLayout(options.verticalScale),
+      unitsPerDay: plan.mmPerDay,
+    });
     const axis = buildAxis(doc, plan.mmPerDay, undefined, PRINT_TICK_SCALE);
 
     /*

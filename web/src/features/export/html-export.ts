@@ -259,7 +259,15 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   .cp-root { position: relative; width: 100%; height: 100vh; overflow: hidden; }
-  .cp-stage { position: absolute; inset: 0; cursor: grab; touch-action: none; }
+  /*
+   * Nothing here is text to select - it is a drawing you drag. Leaving
+   * selection on meant every pan swept a blue highlight across the labels it
+   * passed over.
+   */
+  .cp-stage {
+    position: absolute; inset: 0; cursor: grab; touch-action: none;
+    user-select: none; -webkit-user-select: none;
+  }
   .cp-stage.cp-dragging { cursor: grabbing; }
   .cp-surface { transform-origin: 0 0; will-change: transform; }
   .cp-axis-upper { fill: ${inkMuted}; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
@@ -330,7 +338,7 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
   </div>
 
   <div class="cp-tip" id="cp-tip"><b></b><span></span></div>
-  <p class="cp-hint">Drag to pan · scroll to zoom</p>
+  <p class="cp-hint">Drag or scroll to pan · Ctrl + scroll to zoom</p>
 </div>
 
 <script>
@@ -367,13 +375,29 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
     apply();
   }
 
+  /*
+   * Ctrl or Cmd plus wheel zooms; a plain wheel scrolls, both ways. A trackpad
+   * reports sideways gestures as deltaX, so honouring it is what makes
+   * two-finger horizontal scrolling work - and it matches how every map and
+   * canvas behaves, which is what people try first.
+   */
   stage.addEventListener("wheel", function (e) {
     e.preventDefault();
-    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+    if (e.ctrlKey || e.metaKey) {
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+      return;
+    }
+    // Shift turns a vertical wheel into a horizontal one, for mice with only
+    // one axis.
+    if (e.shiftKey && e.deltaX === 0) tx -= e.deltaY;
+    else { tx -= e.deltaX; ty -= e.deltaY; }
+    apply();
   }, { passive: false });
 
   var dragging = false, lastX = 0, lastY = 0, pointer = null;
   stage.addEventListener("pointerdown", function (e) {
+    // Stops the browser starting a text selection or a native image drag.
+    e.preventDefault();
     dragging = true; pointer = e.pointerId; lastX = e.clientX; lastY = e.clientY;
     stage.setPointerCapture(pointer);
     stage.classList.add("cp-dragging");

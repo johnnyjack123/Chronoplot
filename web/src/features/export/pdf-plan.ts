@@ -19,6 +19,16 @@ export interface ExportOptions {
   orientation: Orientation;
   /** Millimetres per day. `null` means "fit the whole timeline to one page width". */
   mmPerDay: number | null;
+  /**
+   * Multiplier on every vertical measurement - lane heights, bar heights, the
+   * gaps between them.
+   *
+   * The scale presets only ever changed the horizontal scale, which is why a
+   * "detailed" export spread across more pages sideways but stayed exactly as
+   * cramped top to bottom. Text size is left alone: this makes rows roomier,
+   * not the type bigger.
+   */
+  verticalScale: number;
   /** Theme whose colours the PDF is drawn in. */
   theme: ThemeName;
   title: string;
@@ -58,6 +68,19 @@ export const PRINT_LAYOUT = {
   minItemGap: 1.2,
   labelInset: 1.5,
 };
+
+/** PRINT_LAYOUT with every vertical measurement scaled. */
+export function printLayout(verticalScale: number) {
+  const scale = Math.min(4, Math.max(0.4, verticalScale || 1));
+  return {
+    ...PRINT_LAYOUT,
+    cardHeight: PRINT_LAYOUT.cardHeight * scale,
+    cardGap: PRINT_LAYOUT.cardGap * scale,
+    lanePadding: PRINT_LAYOUT.lanePadding * scale,
+    groupHeaderHeight: PRINT_LAYOUT.groupHeaderHeight * scale,
+    groupGap: PRINT_LAYOUT.groupGap * scale,
+  };
+}
 
 export function pageBox(options: ExportOptions): { width: number; height: number } {
   const page = PAGE_SIZES[options.pageSize];
@@ -101,7 +124,7 @@ export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
   const totalDays = Math.max(1, inclusiveDays(doc.settings.start, doc.settings.end));
   const mmPerDay = options.mmPerDay ?? availableWidth / totalDays;
 
-  const built = computeLayout(doc, { ...PRINT_LAYOUT, unitsPerDay: mmPerDay });
+  const built = computeLayout(doc, { ...printLayout(options.verticalScale), unitsPerDay: mmPerDay });
   const axis = buildAxis(doc, mmPerDay, undefined, PRINT_TICK_SCALE);
 
   /* ---------------------------------------------------- horizontal slices -- */
