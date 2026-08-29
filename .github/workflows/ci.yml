@@ -60,16 +60,17 @@ jobs:
           # repository, if only so that scanning for such things stays useful.
           export SESSION_SECRET="$(openssl rand -hex 32)"
           npm start &
-          server=$!
+
           # Wait for the port rather than sleeping a guessed number of seconds.
           for _ in $(seq 1 40); do
             curl -fsS http://localhost:5188/api/health >/dev/null 2>&1 && break
             sleep 0.5
           done
+
+          # No trap, no captured exit status: `run` blocks execute under
+          # `bash -e`, so a failing test aborts the step here and the runner
+          # tears the server down with the job.
           BASE=http://localhost:5188 ORIGIN=http://localhost:5188 node server/test/smoke.mjs
-          status=$?
-          kill $server
-          exit $status
 
   image:
     name: Build and push the image

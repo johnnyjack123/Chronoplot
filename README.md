@@ -168,10 +168,65 @@ No secret to configure: `GITHUB_TOKEN` can write to GHCR given the
 docker pull ghcr.io/<owner>/<repo>:latest
 ```
 
-The arm64 half is built under QEMU emulation and is several times slower than
-the native one. That is tolerable only because `better-sqlite3` and
-`@node-rs/argon2` both ship arm64 prebuilds, so nothing is compiled — if that
-changes, split the job across a native arm64 runner instead.
+The arm64 half is built under QEMU emulation. **That is only tolerable because
+nothing is compiled:** `better-sqlite3` and `@node-rs/argon2` both ship arm64
+prebuilds, so `npm ci` downloads binaries and the emulator is merely running
+`npm` and `tsc`. Roughly a two- to threefold slowdown.
+
+#### If a dependency ever has to be compiled for arm64
+
+Emulated compilation is a different order of problem — a native addon that takes
+a minute on x86 can take twenty under QEMU, and `node-gyp` builds have been
+known to exhaust the runner's memory. Do not solve it by waiting longer.
+
+Build each architecture on its own machine and join the results into a manifest.
+GitHub provides `ubuntu-24.04-arm` runners (free for public repositories; a paid
+plan for private ones):
+
+```yaml
+  image:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm     # native, not emulated
+    runs-on: ${{ matrix.runner }}
+    steps:
+      # ... login as before, then build one architecture and publish it by
+      # digest rather than by tag:
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
+      - run: echo "${{ steps.build.outputs.digest }}" > /tmp/digest
+      - uses: actions/upload-artifact@v4
+        with: { name: digest-${{ strategy.job-index }}, path: /tmp/digest }
+
+  manifest:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      # Download both digests, then stitch them into one multi-arch tag:
+      - run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository }}:latest \
+            $(cat digest-*/digest | sed 's|^|ghcr.io/${{ github.repository }}@|')
+```
+
+The tag then resolves to whichever architecture the puller is on, exactly as the
+single-job version does — the difference is only where the work happened.
+
+Two other routes, for completeness. **Cross-compiling** inside the Dockerfile
+(`FROM --platform=$BUILDPLATFORM`) works well for pure JavaScript but not for
+native addons, which need a cross toolchain and matching Node headers per
+target. **Committing prebuilt binaries** for your own native dependency, via
+something like `prebuildify`, moves the compile out of the image build entirely
+— which is exactly what the two dependencies here already do, and why none of
+this is needed today.
 
 ### Backups
 
