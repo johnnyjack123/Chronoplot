@@ -1,0 +1,125 @@
+# Build, test, and publish a multi-architecture image.
+#
+# The image job depends on the test job, so a push that breaks the suite never
+# produces a tagged image. Images go to the GitHub Container Registry attached
+# to this repository - no external account or secret is needed, because
+# GITHUB_TOKEN can write to it given the `packages: write` permission below.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push supersedes an in-flight run for the same ref.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Typecheck, unit tests, smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck and build
+        run: npm run build
+
+      - name: Unit suites
+        run: |
+          for suite in dates axis reorder packing pdf-plan html-export; do
+            echo "--- $suite"
+            npx tsx --tsconfig web/tsconfig.json "web/test/$suite.test.ts"
+          done
+
+      - name: Smoke test against the production build
+        env:
+          NODE_ENV: production
+          # Throwaway: this server exists for the length of one job and is
+          # never reachable from outside it.
+          SESSION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef
+          DATABASE_URL: /tmp/ci-smoke.sqlite
+          APP_ORIGIN: http://localhost:5188
+          PORT: "5188"
+        run: |
+          npm start &
+          server=$!
+          # Wait for the port rather than sleeping a guessed number of seconds.
+          for _ in $(seq 1 40); do
+            curl -fsS http://localhost:5188/api/health >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          BASE=http://localhost:5188 ORIGIN=http://localhost:5188 node server/test/smoke.mjs
+          status=$?
+          kill $server
+          exit $status
+
+  image:
+    name: Build and push the image
+    needs: test
+    # Pull requests from forks cannot write packages, and there is nothing to
+    # publish from a proposal anyway.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # QEMU is what lets an x86 runner produce an arm64 image. It is emulation,
+      # so the arm64 half is several times slower than the native one - tolerable
+      # here only because better-sqlite3 and @node-rs/argon2 both ship arm64
+      # prebuilds, so nothing is actually compiled. If that ever stops being
+      # true, move this job to a native arm64 runner and build a manifest from
+      # two jobs instead.
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Layer cache in the Actions cache, so an unchanged dependency tree
+          # does not re-run npm ci on both architectures every push.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -153,6 +153,26 @@ Building under WSL works from either filesystem, though a clone on the Linux
 side is much faster than one reached through `/mnt/c`. `.gitattributes` keeps
 the Dockerfile on LF endings so a Windows checkout does not upset the parser.
 
+### Continuous integration
+
+`.github/workflows/ci.yml` typechecks, runs all six unit suites and the HTTP
+smoke test against a production build, then builds and pushes a multi-arch
+image (`linux/amd64` and `linux/arm64`) to this repository's GitHub Container
+Registry. The image job depends on the test job, so a push that breaks the suite
+never produces a tagged image.
+
+No secret to configure: `GITHUB_TOKEN` can write to GHCR given the
+`packages: write` permission the workflow declares. Pull the result with:
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:latest
+```
+
+The arm64 half is built under QEMU emulation and is several times slower than
+the native one. That is tolerable only because `better-sqlite3` and
+`@node-rs/argon2` both ship arm64 prebuilds, so nothing is compiled — if that
+changes, split the job across a native arm64 runner instead.
+
 ### Backups
 
 ```bash
