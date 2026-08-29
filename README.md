@@ -156,17 +156,39 @@ the Dockerfile on LF endings so a Windows checkout does not upset the parser.
 ### Continuous integration
 
 `.github/workflows/ci.yml` typechecks, runs all six unit suites and the HTTP
-smoke test against a production build, then builds and pushes a multi-arch
-image (`linux/amd64` and `linux/arm64`) to this repository's GitHub Container
-Registry. The image job depends on the test job, so a push that breaks the suite
+smoke test against a production build, then builds and publishes a multi-arch
+image. The image jobs depend on the test job, so a push that breaks the suite
 never produces a tagged image.
 
+Each architecture is built on a machine of that architecture — `ubuntu-latest`
+for amd64, `ubuntu-24.04-arm` for arm64 — and pushed **by digest**. A final job
+stitches the digests into one tagged manifest list with
+`docker buildx imagetools create`. Pushing by digest matters: two jobs pushing
+the same tag would each overwrite the other's architecture.
+
 No secret to configure: `GITHUB_TOKEN` can write to GHCR given the
-`packages: write` permission the workflow declares. Pull the result with:
+`packages: write` permission each job declares. One repository setting does need
+checking though — **Settings → Actions → General → Workflow permissions** must
+be "Read and write", or the push to the registry is refused.
+
+The image name is derived from the repository and lowercased, because GHCR
+rejects uppercase names and a repository is free to have one:
 
 ```bash
-docker pull ghcr.io/<owner>/<repo>:latest
+docker pull ghcr.io/<owner>/<repo>:latest      # lowercase
 ```
+
+Docker resolves the tag to whichever architecture is doing the pulling; there is
+no separate arm64 tag to remember.
+
+**Tags produced.** Every push to the default branch moves `latest`, and also
+publishes `main` and `sha-<short>`. A `v1.2.3` tag additionally publishes `1.2.3`
+and `1.2`. `latest` is a moving pointer — pin to `sha-` or a version tag if a
+deployment must not change under you.
+
+`ubuntu-24.04-arm` runners are free for public repositories. If this one becomes
+private, either add a paid runner or fall back to a single job with
+`platforms: linux/amd64,linux/arm64` under QEMU.
 
 The arm64 half is built under QEMU emulation. **That is only tolerable because
 nothing is compiled:** `better-sqlite3` and `@node-rs/argon2` both ship arm64

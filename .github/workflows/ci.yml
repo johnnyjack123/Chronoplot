@@ -1,9 +1,18 @@
 # Build, test, and publish a multi-architecture image.
 #
-# The image job depends on the test job, so a push that breaks the suite never
+# Each architecture is built on a machine of that architecture and published by
+# digest; a final job stitches the digests into one tagged manifest. Emulation
+# is avoided entirely - see the README for why that matters the moment a
+# dependency has to be compiled rather than downloaded.
+#
+# The image jobs depend on the test job, so a push that breaks the suite never
 # produces a tagged image. Images go to the GitHub Container Registry attached
-# to this repository - no external account or secret is needed, because
-# GITHUB_TOKEN can write to it given the `packages: write` permission below.
+# to this repository; no secret is needed, because GITHUB_TOKEN can write to it
+# given the `packages: write` permission each job declares.
+#
+# If the repository ever becomes private, `ubuntu-24.04-arm` stops being free.
+# Either add a paid runner or fall back to a single QEMU job with
+# `platforms: linux/amd64,linux/arm64`.
 
 name: CI
 
@@ -21,7 +30,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   test:
@@ -72,11 +80,74 @@ jobs:
           # tears the server down with the job.
           BASE=http://localhost:5188 ORIGIN=http://localhost:5188 node server/test/smoke.mjs
 
-  image:
-    name: Build and push the image
+  build:
+    name: Build ${{ matrix.platform }}
     needs: test
     # Pull requests from forks cannot write packages, and there is nothing to
     # publish from a proposal anyway.
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR rejects uppercase image names, and a repository name is free to
+      # contain them. Deriving the name instead of hard-coding it keeps the
+      # workflow correct if the repository is ever renamed or forked.
+      - name: Derive the image name
+        id: image
+        run: |
+          echo "name=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "slug=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Published by digest, not by tag: two jobs pushing the same tag would
+      # each overwrite the other's architecture. The manifest job below turns
+      # the digests into one tag that carries both.
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ steps.image.outputs.slug }}
+          cache-to: type=gha,mode=max,scope=${{ steps.image.outputs.slug }}
+
+      - name: Record the digest
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${{ steps.build.outputs.digest }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ steps.image.outputs.slug }}
+          path: /tmp/digests/*
+          retention-days: 1
+          if-no-files-found: error
+
+  manifest:
+    name: Publish the multi-arch tag
+    needs: build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -84,17 +155,16 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Derive the image name
+        id: image
+        run: |
+          echo "name=${REGISTRY}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
-      # QEMU is what lets an x86 runner produce an arm64 image. It is emulation,
-      # so the arm64 half is several times slower than the native one - tolerable
-      # here only because better-sqlite3 and @node-rs/argon2 both ship arm64
-      # prebuilds, so nothing is actually compiled. If that ever stops being
-      # true, move this job to a native arm64 runner and build a manifest from
-      # two jobs instead.
-      - uses: docker/setup-qemu-action@v3
+      - uses: actions/download-artifact@v4
         with:
-          platforms: arm64
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
 
       - uses: docker/setup-buildx-action@v3
 
@@ -107,7 +177,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -115,14 +185,14 @@ jobs:
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Layer cache in the Actions cache, so an unchanged dependency tree
-          # does not re-run npm ci on both architectures every push.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # One manifest list per tag, listing both architecture digests. Docker
+      # then serves whichever entry matches the puller's platform.
+      - name: Create the manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ steps.image.outputs.name }}@sha256:%s ' *)
+
+      - name: Show what was published
+        run: docker buildx imagetools inspect ${{ steps.image.outputs.name }}:${{ steps.meta.outputs.version }}
