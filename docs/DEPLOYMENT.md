@@ -35,9 +35,10 @@ It is read exactly once, on the first boot of an empty database, to seed the
 stored setting. From then on the admin screen owns it and the variable is
 ignored — changing it later does nothing.
 
-The compose file defaults it to **false**, unlike a local `npm run dev`. The
-first account to register becomes the administrator, so an instance that is
-briefly open on a public address is an instance a stranger can take ownership
+The compose file **hard-codes it to `false`** rather than exposing it as a
+variable, because a variable there implies it still does something after the
+first boot. The first account to register becomes the administrator, so an
+instance briefly open on a public address is one a stranger can take ownership
 of. Closing it costs nothing: the first account is always allowed in regardless
 of the setting, and can open registration afterwards from the admin screen.
 

@@ -36,16 +36,17 @@ services:
       # scheme and port - the origin check and the cookie scope both use it.
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:5174}
       SESSION_SECRET: ${SESSION_SECRET:?put SESSION_SECRET in .env - see the note at the top}
-      # Read exactly once, on the first boot of an empty database, to seed the
-      # stored setting. From then on the admin screen owns it and this value is
-      # ignored - so it is not a switch, it is a starting position.
+      # Fixed, not configurable. This is read exactly once - on the first boot
+      # of an empty database - to seed a setting the admin screen owns from then
+      # on. Exposing it as a variable invites the belief that it still does
+      # something later, which it does not.
       #
-      # Closed by default, unlike a local `npm run dev`. The first account to
-      # register becomes the administrator, so an instance that is briefly open
-      # on a public address is an instance a stranger can take ownership of.
-      # Closing it costs nothing: the first account gets in regardless, and can
+      # Closed is the only safe starting position for a deployment: the first
+      # account to register becomes the administrator, so an instance briefly
+      # open on a public address is one a stranger can take ownership of. It
+      # costs nothing, because the first account is let in regardless and can
       # open registration from the admin screen afterwards.
-      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      ALLOW_REGISTRATION: "false"
       # Set here, not taken from .env: the path inside the container has to be
       # the volume. A host path copied in from .env would put the database on a
       # container layer, where it disappears with the container.
