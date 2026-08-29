@@ -1,10 +1,22 @@
-# Chronoplot, ready to run:
+# Chronoplot.
 #
-#   SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d --build
+#   cp env.example .env        # then set SESSION_SECRET to something random
+#   docker compose up -d --build
+#
+# Every value below comes from the environment at *run* time. Nothing secret is
+# ever built into the image: .env is excluded from the build context, so it
+# cannot be copied in even by accident.
+#
+# Compose reads `.env` from this directory to resolve the ${...} references
+# below - the same file the server reads when run without Docker, so there is
+# one place to configure either way.
+#
+# Put SESSION_SECRET in that file rather than passing it on the command line.
+# It signs the CSRF tokens, so a fresh random value on every start would reject
+# every already-open browser tab with a 403 until it reloaded.
 #
 # The server refuses to start in production without a SESSION_SECRET of at
-# least 32 characters, which is deliberate - a weak one means forgeable CSRF
-# tokens.
+# least 32 characters, which is deliberate - a weak one means forgeable tokens.
 
 services:
   chronoplot:
@@ -19,8 +31,11 @@ services:
       # Where the browser reaches this instance. Must match exactly, including
       # scheme and port - the origin check and the cookie scope both use it.
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:5174}
-      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET, e.g. openssl rand -hex 32}
+      SESSION_SECRET: ${SESSION_SECRET:?put SESSION_SECRET in .env - see the note at the top}
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      # Set here, not taken from .env: the path inside the container has to be
+      # the volume. A host path copied in from .env would put the database on a
+      # container layer, where it disappears with the container.
       DB_DRIVER: sqlite
       DATABASE_URL: /data/chronoplot.sqlite
     volumes:

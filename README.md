@@ -125,16 +125,31 @@ as you drag.
 ### Docker
 
 ```bash
-SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d --build
+cp env.example .env        # then set SESSION_SECRET to something random
+docker compose up -d --build
 ```
 
-One image serves both the API and the browser app, which is what keeps them on
-a single origin. The database lives on the `chronoplot-data` volume, never in an
-image layer — losing that volume loses every project.
+Configuration comes from `.env` — the same file the server reads when run
+without Docker, so there is one place to configure it either way. Compose reads
+it to resolve the `${...}` references in `docker-compose.yml`, at run time.
+
+**Nothing secret is in the image.** `.env` is excluded from the build context,
+so it cannot be copied in even by accident, and the Dockerfile sets no secret of
+its own. Put `SESSION_SECRET` in `.env` rather than passing it on the command
+line: it signs the CSRF tokens, so a fresh random value on every start would
+reject every already-open browser tab with a 403 until it reloaded.
+
+`DATABASE_URL` is the one value compose sets itself rather than reading from
+`.env`, because inside the container it has to point at the volume. The database
+lives on `chronoplot-data`, never in an image layer — losing that volume loses
+every project.
 
 ```bash
 docker build -t chronoplot .        # image only
 ```
+
+Building under WSL works from either filesystem; `.gitattributes` keeps the
+Dockerfile on LF endings so a Windows checkout does not upset the parser.
 
 ### Backups
 

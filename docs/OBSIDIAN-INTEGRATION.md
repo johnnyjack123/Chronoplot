@@ -142,7 +142,7 @@ Session cookies are useless here — the plugin is not a browser. Chronoplot nee
 | Metadata | Name, created-at, last-used-at, optional expiry |
 | Scope | Optional single project. Recommended for plugin use |
 | Transport | `Authorization: Bearer cpt_…` |
-| CSRF | Not applicable and must be skipped: CSRF defends ambient credentials, and a bearer token is not ambient. The existing hook only runs when a session cookie is present, so this already holds — verify it, do not assume |
+| CSRF | Not applicable: CSRF defends ambient credentials, and a bearer token is not ambient. **Verified** — the hook in `server/src/auth/plugin.ts` returns early on `if (!request.sessionToken) return;`, so a bearer-only request never reaches it |
 | Rate limit | Tighter than the session API |
 
 New table:
@@ -162,6 +162,11 @@ CREATE TABLE api_tokens (
 
 A token inherits its owner's permissions and can never exceed them — resolve it
 to a user and run the existing `loadAccess` unchanged.
+
+> **Implementation trap:** bearer auth must set `request.user` but leave
+> `request.sessionToken` alone. Setting it would drag every token request into
+> the CSRF hook, which then demands a cookie and a matching header the plugin
+> has no way to produce — a 403 whose cause is nowhere near where it is raised.
 
 > **Caveat worth stating in the plugin UI:** Obsidian stores plugin settings in
 > plain JSON inside the vault (`.obsidian/plugins/…/data.json`). If the vault is
