@@ -42,7 +42,6 @@ export function EditorPage() {
           version: project.version,
           role: project.role,
         });
-        setProjectTheme(project.doc.settings.theme);
         useSyncStore.getState().set({ status: "idle", message: null, conflict: null });
       } catch (caught) {
         if (cancelled) return;
@@ -58,7 +57,20 @@ export function EditorPage() {
       cancelled = true;
       reset();
     };
-  }, [projectId, load, reset, setProjectTheme]);
+  }, [projectId, load, reset]);
+
+  /*
+   * The document is the single source of truth for the project's theme.
+   *
+   * Applying it only once on load was the bug behind "changing the theme does
+   * nothing": the setting changed, the document changed, and nothing was
+   * watching. Deriving it here also covers the cases an imperative call in the
+   * settings panel would have missed - undo, redo, and adopting the server's
+   * document after a conflict.
+   */
+  useEffect(() => {
+    if (doc) setProjectTheme(doc.settings.theme);
+  }, [doc?.settings.theme, doc, setProjectTheme]);
 
   useSyncEngine(doc !== null && !readOnly);
   useShortcuts(!readOnly);

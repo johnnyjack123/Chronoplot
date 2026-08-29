@@ -8,9 +8,12 @@
  */
 import { create } from "zustand";
 import { produce, type Draft } from "immer";
-import type { Item, Row, TimelineDoc } from "@shared";
-import { addDays, addYears, daysBetween, endOfMonth, endOfYear, startOfMonth, startOfYear, today } from "@/lib/dates";
-import { clampZoom, fitUnitsPerDay } from "@/features/timeline/geometry";
+import type { Item, Precision, Row, TimelineDoc } from "@shared";
+import {
+  addDays, addYears, daysBetween, endOfMonth, endOfYear, snapToPrecision,
+  startOfMonth, startOfYear, today,
+} from "@/lib/dates";
+import { clampZoom } from "@/features/timeline/geometry";
 
 const HISTORY_LIMIT = 100;
 /** Upper bound on how long a timeline may span. See `updateSettings`. */
@@ -52,6 +55,28 @@ export interface EditorState {
   /** Item id whose link is being dragged, if any. */
   linkingFrom: string | null;
 
+  /**
+   * Precision the last edited item used. New cards inherit it, because someone
+   * working in years does not want to reset every card back from days.
+   */
+  lastPrecision: Precision;
+  /** Magnetic snapping to other cards' edges while dragging. */
+  snapping: boolean;
+  /**
+   * What is being renamed in place - a card, lane or group. Inline editing is
+   * view state, so it lives here rather than in the document.
+   */
+  editingId: string | null;
+  /**
+   * A requested change of view, for the canvas to animate.
+   *
+   * The canvas owns the scroll container, so only it can move the viewport -
+   * and "fit" is as much a scroll as a zoom, which is why simply setting the
+   * zoom left the old scroll position behind and cut off the left-hand side.
+   * The sequence number is what makes repeating the same request fire again.
+   */
+  viewCommand: { seq: number; zoom: number | "fit" } | null;
+
   load: (input: {
     projectId: string;
     title: string;
@@ -74,8 +99,11 @@ export interface EditorState {
   select: (selection: Selection) => void;
   setZoom: (unitsPerDay: number) => void;
   setPlotWidth: (width: number) => void;
-  /** Scales so the whole timeline fits the plot area. */
-  zoomToFit: () => void;
+  setLastPrecision: (precision: Precision) => void;
+  setSnapping: (snapping: boolean) => void;
+  setEditing: (id: string | null) => void;
+  /** Asks the canvas to animate to a zoom level, or to fit the whole timeline. */
+  requestZoom: (zoom: number | "fit") => void;
   setLinkingFrom: (id: string | null) => void;
 
   /** Called by the sync engine once the server has stored a version. */
@@ -100,6 +128,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   unitsPerDay: 3,
   plotWidth: 1000,
   linkingFrom: null,
+  lastPrecision: "day",
+  snapping: true,
+  editingId: null,
+  viewCommand: null,
 
   load: ({ projectId, title, doc, version, role }) =>
     set({
@@ -113,6 +145,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: false,
       selection: { kind: "none" },
       linkingFrom: null,
+      editingId: null,
     }),
 
   reset: () =>
@@ -126,6 +159,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: false,
       selection: { kind: "none" },
       linkingFrom: null,
+      editingId: null,
     }),
 
   mutate: (recipe, options) => {
@@ -190,11 +224,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   select: (selection) => set({ selection }),
   setZoom: (unitsPerDay) => set({ unitsPerDay: clampZoom(unitsPerDay) }),
   setPlotWidth: (plotWidth) => set({ plotWidth }),
-
-  zoomToFit: () => {
-    const { doc, plotWidth } = get();
-    if (doc) set({ unitsPerDay: fitUnitsPerDay(doc, plotWidth) });
-  },
+  setLastPrecision: (lastPrecision) => set({ lastPrecision }),
+  setSnapping: (snapping) => set({ snapping }),
+  setEditing: (editingId) => set({ editingId }),
+  requestZoom: (zoom) => set({ viewCommand: { seq: (get().viewCommand?.seq ?? 0) + 1, zoom } }),
   setLinkingFrom: (linkingFrom) => set({ linkingFrom }),
 
   markSynced: (version) => set({ baseVersion: version, dirty: false }),
@@ -210,20 +243,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
  * identical whether it was triggered by a menu, a keyboard shortcut or a drag.
  */
 export const commands = {
+  /*
+   * A new lane opens straight into its name field. A lane called "Lane 4" is
+   * never what anyone wanted, and making them hunt for where to rename it turns
+   * one action into three.
+   */
   addRow(title?: string): string {
     const id = newId();
-    useEditorStore.getState().mutate((draft) => {
+    const store = useEditorStore.getState();
+    store.mutate((draft) => {
       draft.rows.push({ id, groupId: null, title: title ?? `Lane ${draft.rows.length + 1}` });
     });
+    store.select({ kind: "row", id });
+    store.setEditing(id);
     return id;
   },
 
   addRowToGroup(groupId: string): string {
     const id = newId();
-    useEditorStore.getState().mutate((draft) => {
+    const store = useEditorStore.getState();
+    store.mutate((draft) => {
       const count = draft.rows.filter((row) => row.groupId === groupId).length;
       draft.rows.push({ id, groupId, title: `Lane ${count + 1}` });
     });
+    store.select({ kind: "row", id });
+    store.setEditing(id);
     return id;
   },
 
@@ -308,9 +352,12 @@ export const commands = {
 
   addGroup(title?: string): string {
     const id = newId();
-    useEditorStore.getState().mutate((draft) => {
+    const store = useEditorStore.getState();
+    store.mutate((draft) => {
       draft.groups.push({ id, title: title ?? `Phase ${draft.groups.length + 1}`, collapsed: false });
     });
+    store.select({ kind: "group", id });
+    store.setEditing(id);
     return id;
   },
 
@@ -342,19 +389,26 @@ export const commands = {
 
   addItem(input: Partial<Item> & { rowId: string; start: string; end: string }): string {
     const id = newId();
-    useEditorStore.getState().mutate((draft) => {
+    const store = useEditorStore.getState();
+    // Inherit the precision last worked in, and snap the dates to it, so a card
+    // drawn while working in months covers whole months from the start.
+    const precision = input.precision ?? store.lastPrecision;
+
+    store.mutate((draft) => {
       const used = draft.items.length;
+      const kind = input.kind ?? "bar";
+      const start = snapToPrecision(input.start, precision, "start");
       draft.items.push({
         id,
         rowId: input.rowId,
-        kind: input.kind ?? "bar",
+        kind,
         title: input.title ?? "Untitled",
         // Cycling through the eight slots by creation order means a fresh
         // timeline is varied without the user having to pick colours.
         color: input.color ?? ((used % 8) + 1),
-        start: input.start,
-        end: input.end,
-        precision: input.precision ?? "day",
+        start,
+        end: kind === "milestone" ? start : snapToPrecision(input.end, precision, "end"),
+        precision,
         ...(input.notes ? { notes: input.notes } : {}),
         ...(input.progress !== undefined ? { progress: input.progress } : {}),
       });
@@ -363,6 +417,8 @@ export const commands = {
   },
 
   updateItem(itemId: string, patch: Partial<Item>, coalesceKey?: string): void {
+    if (patch.precision) useEditorStore.getState().setLastPrecision(patch.precision);
+
     useEditorStore.getState().mutate((draft) => {
       const item = draft.items.find((candidate) => candidate.id === itemId);
       if (!item) return;

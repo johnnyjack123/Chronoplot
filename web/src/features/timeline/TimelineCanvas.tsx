@@ -4,15 +4,17 @@ import {
 } from "react";
 import type { TimelineDoc } from "@shared";
 import { cn } from "@/lib/cn";
-import { addDays, clampDate, daysBetween, snapToPrecision, today } from "@/lib/dates";
+import { addDays, clampDate, daysBetween, inclusiveDays, snapToPrecision, today } from "@/lib/dates";
 import { commands, useEditorStore } from "@/state/editor-store";
-import { IconButton } from "@/components/ui/Button";
-import { ChevronDownIcon, ChevronRightIcon, GripIcon, PlusIcon } from "@/components/icons";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Tooltip } from "@/components/ui/Popover";
+import { ChevronDownIcon, ChevronRightIcon, GripIcon, GroupIcon, PlusIcon } from "@/components/icons";
 import { PlotBackground, TimeAxis } from "./Axis";
 import { LinkLayer, PendingLink } from "./Links";
-import { TimelineCard, type DragMode } from "./TimelineCard";
+import { TimelineCard, describeRange, type DragMode } from "./TimelineCard";
 import {
-  buildAxis, clampToWindow, clampZoom, dateAtX, laneAtY, layout as computeLayout, snapDrag, xOf,
+  buildAxis, clampToWindow, clampZoom, collectSnapTargets, dateAtX, fitUnitsPerDay, laneAtY,
+  layout as computeLayout, snapDrag, snapOffsetDays, xOf,
   DEFAULT_LAYOUT, SIDEBAR_WIDTH, type PlacedItem,
 } from "./geometry";
 
@@ -58,10 +60,18 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
   const selection = useEditorStore((state) => state.selection);
   const select = useEditorStore((state) => state.select);
   const setZoom = useEditorStore((state) => state.setZoom);
+  const snapping = useEditorStore((state) => state.snapping);
+  const editingId = useEditorStore((state) => state.editingId);
+  const viewCommand = useEditorStore((state) => state.viewCommand);
 
   const plotRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState>(null);
+  const [hover, setHover] = useState<{ placed: PlacedItem; x: number; y: number } | null>(null);
+
+  const onHover = useCallback((placed: PlacedItem | null, x: number, y: number) => {
+    setHover(placed ? { placed, x, y } : null);
+  }, []);
 
   /*
    * The scrolled viewport, tracked so the axis can be built for just the slice
@@ -216,6 +226,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
       if (!item) return;
 
       const deltaDays = Math.round((event.clientX - drag.pointerStartX) / unitsPerDay);
+      const snapTargets = snapping ? collectSnapTargets(doc, drag.itemId) : [];
 
       if (drag.kind === "move") {
         const moved = snapDrag(
@@ -223,7 +234,18 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           deltaDays,
           item.precision,
         );
-        const bounded = clampToWindow(moved.start, moved.end, doc.settings.start, doc.settings.end);
+        // Latch onto neighbouring edges once they are within a few pixels. The
+        // threshold is in pixels rather than days so it feels identical whether
+        // a day is forty pixels wide or a hundredth of one.
+        const nudge = snapping
+          ? snapOffsetDays([moved.start, addDays(moved.end, 1)], snapTargets, unitsPerDay)
+          : 0;
+        const snapped =
+          nudge === 0
+            ? moved
+            : { start: addDays(moved.start, nudge), end: addDays(moved.end, nudge) };
+
+        const bounded = clampToWindow(snapped.start, snapped.end, doc.settings.start, doc.settings.end);
 
         // Dragging vertically re-parents the card into whichever lane the
         // pointer is over, which is how a card moves between rows.
@@ -240,15 +262,25 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
       if (drag.kind === "resize-start") {
         const raw = addDays(drag.originStart, deltaDays);
-        const snapped = snapToPrecision(raw, item.precision, "start");
-        const next = clampDate(snapped, doc.settings.start, item.end);
+        const aligned = addDays(raw, snapOffsetDays([raw], snapTargets, unitsPerDay));
+        const next = clampDate(
+          snapToPrecision(aligned, item.precision, "start"),
+          doc.settings.start,
+          item.end,
+        );
         commands.updateItem(drag.itemId, { start: next }, `resize:${drag.itemId}`);
         return;
       }
 
       const raw = addDays(drag.originEnd, deltaDays);
-      const snapped = snapToPrecision(raw, item.precision, "end");
-      const next = clampDate(snapped, item.start, doc.settings.end);
+      // The trailing edge sits a day before the target, so two cards butt up
+      // against each other rather than overlapping by one day.
+      const aligned = addDays(raw, snapOffsetDays([addDays(raw, 1)], snapTargets, unitsPerDay));
+      const next = clampDate(
+        snapToPrecision(aligned, item.precision, "end"),
+        item.start,
+        doc.settings.end,
+      );
       commands.updateItem(drag.itemId, { end: next }, `resize:${drag.itemId}`);
     },
     [doc.items, doc.settings.end, doc.settings.start, drag, layout, localPoint, unitsPerDay],
@@ -322,6 +354,75 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
     return () => element.removeEventListener("wheel", handler);
   }, []);
 
+  /*
+   * Animated view changes.
+   *
+   * Zoom is interpolated geometrically, not linearly: doubling and halving
+   * should feel like equal steps, and a linear ramp between 0.002 and 40 spends
+   * almost all its time at the wide end. Scroll moves alongside it, which is
+   * the part "fit" was missing - setting the zoom alone left the old scroll
+   * offset in place, cutting off the left and leaving a gap on the right.
+   */
+  const animation = useRef(0);
+
+  const animateView = useCallback((toZoom: number, toScrollLeft: number) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    cancelAnimationFrame(animation.current);
+
+    const fromZoom = useEditorStore.getState().unitsPerDay;
+    const fromScroll = container.scrollLeft;
+    const reduced = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+    if (reduced) {
+      useEditorStore.getState().setZoom(toZoom);
+      container.scrollLeft = toScrollLeft;
+      return;
+    }
+
+    const started = performance.now();
+    const DURATION = 380;
+    const step = (now: number): void => {
+      const t = Math.min(1, (now - started) / DURATION);
+      const eased = 1 - Math.pow(1 - t, 3);
+      useEditorStore.getState().setZoom(fromZoom * Math.pow(toZoom / fromZoom, eased));
+      container.scrollLeft = fromScroll + (toScrollLeft - fromScroll) * eased;
+      if (t < 1) animation.current = requestAnimationFrame(step);
+    };
+    animation.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => () => cancelAnimationFrame(animation.current), []);
+
+  /*
+   * The document is read through a ref rather than a dependency. As a
+   * dependency it would re-run this effect on every edit, replaying the last
+   * zoom command and yanking the view back mid-typing.
+   */
+  const docRef = useRef(doc);
+  docRef.current = doc;
+
+  useEffect(() => {
+    if (!viewCommand) return;
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const available = Math.max(200, container.clientWidth - SIDEBAR_WIDTH);
+    if (viewCommand.zoom === "fit") {
+      // Fitting means "show all of it", so the view returns to the start as
+      // well as zooming out - leaving the old scroll offset behind is what cut
+      // off the left-hand side and left a gap on the right.
+      animateView(fitUnitsPerDay(docRef.current, available), 0);
+      return;
+    }
+
+    // A zoom step keeps whatever is in the middle of the view in the middle.
+    const target = clampZoom(viewCommand.zoom);
+    const ratio = target / useEditorStore.getState().unitsPerDay;
+    const centre = container.scrollLeft + available / 2;
+    animateView(target, Math.max(0, centre * ratio - available / 2));
+  }, [viewCommand, animateView]);
+
   /* ------------------------------------------------------------ rendering -- */
 
   const createPreview =
@@ -331,10 +432,15 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           const end = drag.anchor <= drag.current ? drag.current : drag.anchor;
           const lane = layout.lanes.find((candidate) => candidate.rowId === drag.rowId);
           if (!lane) return null;
+          // `left`/`top`, not `x`/`y`: these go straight into a style object,
+          // and x/y are not CSS properties - an absolutely positioned box with
+          // neither left nor top falls back to its static position, which put
+          // every drag preview at the far left of the plot instead of under the
+          // pointer.
           return {
-            x: xOf(start, doc.settings.start, unitsPerDay),
+            left: xOf(start, doc.settings.start, unitsPerDay),
             width: (daysBetween(start, end) + 1) * unitsPerDay,
-            y: lane.y + layout.options.lanePadding,
+            top: lane.y + layout.options.lanePadding,
             height: layout.options.cardHeight,
           };
         })()
@@ -368,7 +474,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           {/* Lane and group names, pinned to the left. */}
           <div
             className="sticky left-0 z-[var(--z-sticky)] shrink-0 border-r border-line-strong bg-surface"
-            style={{ width: SIDEBAR_WIDTH, height: layout.totalHeight }}
+            style={{ width: SIDEBAR_WIDTH, height: layout.totalHeight + LANE_FOOTER_HEIGHT }}
           >
             <LaneList doc={doc} layout={layout} readOnly={readOnly} />
           </div>
@@ -398,7 +504,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
               <div
                 key={`band-${group.groupId}`}
                 aria-hidden
-                className="pointer-events-none absolute left-0 bg-ink/[0.02]"
+                className="pointer-events-none absolute left-0 bg-ink/[0.02] transition-[top,height] duration-[var(--dur-base)] ease-standard"
                 style={{ top: group.y, height: group.height, width: layout.totalWidth }}
               />
             ))}
@@ -406,7 +512,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
               <div
                 key={`sep-${lane.rowId}`}
                 aria-hidden
-                className="pointer-events-none absolute left-0 h-px bg-line"
+                className="pointer-events-none absolute left-0 h-px bg-line transition-[top] duration-[var(--dur-base)] ease-standard"
                 style={{ top: lane.y + lane.height, width: layout.totalWidth }}
               />
             ))}
@@ -439,9 +545,10 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
                     selected={selectedItemId === placed.item.id}
                     readOnly={readOnly}
                     linkTarget={drag?.kind === "link" && drag.overItemId === placed.item.id}
+                    editing={editingId === placed.item.id}
                     onSelect={(id) => select({ kind: "item", id })}
                     onDragStart={onCardDragStart}
-                    onOpenInspector={(id) => select({ kind: "item", id })}
+                    onHover={onHover}
                   />
                 )),
             )}
@@ -462,6 +569,45 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           </div>
         </div>
       </div>
+
+      {/*
+        One tooltip for the whole plot, following the pointer. A tooltip
+        component per card would mean thousands of listeners and portals on a
+        busy timeline for something only ever visible once at a time.
+      */}
+      {hover && drag === null ? <HoverCard hover={hover} /> : null}
+    </div>
+  );
+}
+
+function HoverCard({ hover }: { hover: { placed: PlacedItem; x: number; y: number } }) {
+  const { item } = hover.placed;
+  // Flip to the left of the pointer near the right edge so the tooltip never
+  // pushes itself off screen.
+  const flip = hover.x > globalThis.innerWidth - 260;
+
+  return (
+    <div
+      role="tooltip"
+      className={cn(
+        "pointer-events-none fixed z-[var(--z-popover)] max-w-64 rounded-md border border-line",
+        "bg-raised px-2.5 py-1.5 shadow-2",
+      )}
+      style={{
+        left: flip ? undefined : hover.x + 14,
+        right: flip ? globalThis.innerWidth - hover.x + 14 : undefined,
+        top: hover.y + 16,
+      }}
+    >
+      <p className="truncate-1 text-label text-ink">{item.title}</p>
+      <p className="tabular mt-0.5 text-caption text-ink-muted">{describeRange(hover.placed)}</p>
+      {item.kind === "bar" ? (
+        <p className="tabular text-caption text-ink-subtle">
+          {inclusiveDays(item.start, item.end)} day
+          {inclusiveDays(item.start, item.end) === 1 ? "" : "s"}
+          {item.progress ? ` · ${Math.round(item.progress * 100)}% done` : ""}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -505,6 +651,59 @@ type SidebarDrag =
   | { kind: "row"; id: string; slot: DropSlot | null }
   | { kind: "group"; id: string; slot: GroupSlot | null };
 
+/** Room below the last lane for the buttons that add another one. */
+const LANE_FOOTER_HEIGHT = 48;
+
+/**
+ * Renames a lane or group in place. Double-clicking the label is where people
+ * try first, and a new lane opens straight into this rather than being called
+ * "Lane 4" until someone finds the inspector.
+ */
+function InlineName({
+  value,
+  onCommit,
+  className,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  className?: string;
+}) {
+  const setEditing = useEditorStore((state) => state.setEditing);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const commit = (): void => {
+    const next = draft.trim();
+    if (next && next !== value) onCommit(next);
+    setEditing(null);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onPointerDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") commit();
+        if (event.key === "Escape") setEditing(null);
+      }}
+      className={cn(
+        "min-w-0 flex-1 rounded-sm bg-sunken px-1.5 py-1 text-label text-ink",
+        "outline-none ring-2 ring-accent",
+        className,
+      )}
+    />
+  );
+}
+
 function LaneList({
   doc,
   layout,
@@ -516,6 +715,8 @@ function LaneList({
 }) {
   const selection = useEditorStore((state) => state.selection);
   const select = useEditorStore((state) => state.select);
+  const editingId = useEditorStore((state) => state.editingId);
+  const setEditing = useEditorStore((state) => state.setEditing);
 
   const listRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<SidebarDrag | null>(null);
@@ -620,6 +821,9 @@ function LaneList({
           key={group.groupId}
           className={cn(
             "group/row absolute left-0 right-0 flex items-center gap-1 border-b border-line px-2",
+            // Lanes and groups ease into their new place instead of jumping, so
+            // a reorder reads as a movement rather than a redraw.
+            "transition-[top] duration-[var(--dur-base)] ease-standard",
             drag?.kind === "group" && drag.id === group.groupId && "opacity-40",
           )}
           style={{ top: group.y, height: layout.options.groupHeaderHeight }}
@@ -643,18 +847,26 @@ function LaneList({
           >
             {group.collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
           </IconButton>
-          <button
-            type="button"
-            onClick={() => select({ kind: "group", id: group.groupId })}
-            className={cn(
-              "min-w-0 flex-1 truncate-1 rounded-sm px-1 py-0.5 text-left text-micro uppercase",
-              selection.kind === "group" && selection.id === group.groupId
-                ? "text-accent"
-                : "text-ink-muted hover:text-ink",
-            )}
-          >
-            {group.title}
-          </button>
+          {editingId === group.groupId ? (
+            <InlineName
+              value={group.title}
+              onCommit={(next) => commands.renameGroup(group.groupId, next)}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => select({ kind: "group", id: group.groupId })}
+              onDoubleClick={() => !readOnly && setEditing(group.groupId)}
+              className={cn(
+                "min-w-0 flex-1 truncate-1 rounded-sm px-1 py-0.5 text-left text-micro uppercase",
+                selection.kind === "group" && selection.id === group.groupId
+                  ? "text-accent"
+                  : "text-ink-muted hover:text-ink",
+              )}
+            >
+              {group.title}
+            </button>
+          )}
           {group.collapsed ? (
             <span className="tabular shrink-0 rounded-full bg-accent-soft px-1.5 text-micro text-ink-muted">
               {group.laneCount}
@@ -680,6 +892,7 @@ function LaneList({
             key={lane.rowId}
             className={cn(
               "group/row absolute left-0 right-0 flex items-center gap-1 border-b border-line pl-1.5",
+              "transition-[top] duration-[var(--dur-base)] ease-standard",
               indented && "pl-5",
               drag?.kind === "row" && drag.id === lane.rowId && "opacity-40",
             )}
@@ -696,16 +909,24 @@ function LaneList({
                 <GripIcon className="size-3.5" />
               </span>
             ) : null}
-            <button
-              type="button"
-              onClick={() => select({ kind: "row", id: lane.rowId })}
-              className={cn(
-                "min-w-0 flex-1 truncate-1 rounded-sm px-1.5 py-1 text-left text-label",
-                selected ? "bg-accent-soft text-accent" : "text-ink hover:bg-accent-soft/60",
-              )}
-            >
-              {lane.title}
-            </button>
+            {editingId === lane.rowId ? (
+              <InlineName
+                value={lane.title}
+                onCommit={(next) => commands.renameRow(lane.rowId, next)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => select({ kind: "row", id: lane.rowId })}
+                onDoubleClick={() => !readOnly && setEditing(lane.rowId)}
+                className={cn(
+                  "min-w-0 flex-1 truncate-1 rounded-sm px-1.5 py-1 text-left text-label",
+                  selected ? "bg-accent-soft text-accent" : "text-ink hover:bg-accent-soft/60",
+                )}
+              >
+                {lane.title}
+              </button>
+            )}
             <span className="tabular mr-2 shrink-0 text-micro text-ink-subtle">
               {lane.items.length || ""}
             </span>
@@ -724,8 +945,34 @@ function LaneList({
         </div>
       ) : null}
 
+      {/*
+        Adding a lane belongs where the lanes end, not in the toolbar - up there
+        it reads as a global action and gives no clue where the new lane will
+        appear.
+      */}
+      {!readOnly ? (
+        <div
+          className="absolute left-0 right-0 flex items-center gap-1 px-2"
+          style={{ top: layout.totalHeight, height: LANE_FOOTER_HEIGHT }}
+        >
+          <Button
+            size="sm"
+            icon={<PlusIcon />}
+            className="flex-1"
+            onClick={() => commands.addRow()}
+          >
+            Lane
+          </Button>
+          <Tooltip content="Add a group">
+            <IconButton label="Add group" size="sm" onClick={() => commands.addGroup()}>
+              <GroupIcon />
+            </IconButton>
+          </Tooltip>
+        </div>
+      ) : null}
+
       {layout.lanes.length === 0 && doc.groups.length === 0 ? (
-        <p className="px-3 py-4 text-caption text-ink-subtle">No lanes yet.</p>
+        <p className="px-3 py-3 text-caption text-ink-subtle">No lanes yet.</p>
       ) : null}
     </div>
   );

@@ -52,6 +52,11 @@ export const PRINT_LAYOUT = {
   lanePadding: 1.6,
   groupHeaderHeight: 6,
   groupGap: 3,
+  // Helvetica at 6.5pt averages roughly 1.5mm per glyph.
+  labelCharWidth: 1.5,
+  labelGap: 1.6,
+  minItemGap: 1.2,
+  labelInset: 1.5,
 };
 
 export function pageBox(options: ExportOptions): { width: number; height: number } {

@@ -28,17 +28,17 @@ export function useShortcuts(enabled: boolean): void {
       // Zoom works while typing too - it changes nothing in the document.
       if (mod && (event.key === "=" || event.key === "+")) {
         event.preventDefault();
-        store.setZoom(store.unitsPerDay * 1.5);
+        store.requestZoom(store.unitsPerDay * 1.5);
         return;
       }
       if (mod && event.key === "-") {
         event.preventDefault();
-        store.setZoom(store.unitsPerDay / 1.5);
+        store.requestZoom(store.unitsPerDay / 1.5);
         return;
       }
       if (mod && event.key === "0") {
         event.preventDefault();
-        store.zoomToFit();
+        store.requestZoom("fit");
         return;
       }
 

@@ -34,6 +34,7 @@ export function ExportDialog({
   doc: TimelineDoc;
   title: string;
 }) {
+  const [format, setFormat] = useState<"pdf" | "html">("pdf");
   const [pageSize, setPageSize] = useState<PageSize>("a4");
   const [orientation, setOrientation] = useState<Orientation>("landscape");
   const [scaleKey, setScaleKey] = useState("fit");
@@ -72,12 +73,17 @@ export function ExportDialog({
     setBusy(true);
     setError(null);
     try {
-      // jsPDF is pulled in only now, so opening the editor never pays for it.
-      const { exportPdf } = await import("./pdf-render");
-      await exportPdf(doc, options);
+      if (format === "html") {
+        const { exportHtml } = await import("./html-export");
+        exportHtml(doc, { title, theme, showLaneLabels: repeatLaneLabels });
+      } else {
+        // jsPDF is pulled in only now, so opening the editor never pays for it.
+        const { exportPdf } = await import("./pdf-render");
+        await exportPdf(doc, options);
+      }
       onOpenChange(false);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The PDF could not be generated.");
+      setError(caught instanceof Error ? caught.message : "The export could not be generated.");
     } finally {
       setBusy(false);
     }
@@ -89,8 +95,12 @@ export function ExportDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Export PDF"
-      description="Vector output - text stays selectable and nothing pixelates when printed."
+      title="Export"
+      description={
+        format === "pdf"
+          ? "Vector output - text stays selectable and nothing pixelates when printed."
+          : "A single HTML file with no external dependencies, safe to embed anywhere."
+      }
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -101,6 +111,28 @@ export function ExportDialog({
       }
     >
       <div className="flex flex-col gap-4">
+        <Field
+          label="Format"
+          hint={
+            format === "pdf"
+              ? "Vector pages for printing or sharing."
+              : "One self-contained file you can open, embed in a page, or drop into Obsidian. Pan, zoom and hover for exact dates."
+          }
+        >
+          {() => (
+            <Segmented<"pdf" | "html">
+              value={format}
+              onChange={setFormat}
+              options={[
+                { value: "pdf", label: "PDF" },
+                { value: "html", label: "Interactive HTML" },
+              ]}
+            />
+          )}
+        </Field>
+
+        {format === "pdf" ? (
+        <>
         <Field label="Page size">
           {() => (
             <Segmented<PageSize>
@@ -137,8 +169,17 @@ export function ExportDialog({
             />
           )}
         </Field>
+        </>
+        ) : null}
 
-        <Field label="Colours" hint="Light themes use less ink and read better on paper.">
+        <Field
+          label="Colours"
+          hint={
+            format === "pdf"
+              ? "Light themes use less ink and read better on paper."
+              : "The exported file carries this theme's colours with it."
+          }
+        >
           {(props) => (
             <Select<ThemeName>
               {...props}
@@ -157,10 +198,12 @@ export function ExportDialog({
           <Switch
             checked={repeatLaneLabels}
             onChange={setRepeatLaneLabels}
-            label="Repeat lane names on every page"
-            hint="Keeps a multi-page timeline readable."
+            label={format === "pdf" ? "Repeat lane names on every page" : "Show lane names"}
+            hint={format === "pdf" ? "Keeps a multi-page timeline readable." : undefined}
           />
-          <Switch checked={showToday} onChange={setShowToday} label="Draw the today marker" />
+          {format === "pdf" ? (
+            <Switch checked={showToday} onChange={setShowToday} label="Draw the today marker" />
+          ) : null}
         </div>
 
         {/*
@@ -168,7 +211,7 @@ export function ExportDialog({
           hit export, so it is stated plainly rather than hidden behind a
           preview.
         */}
-        {plan ? (
+        {format === "pdf" && plan ? (
           <div className="rounded-md border border-line bg-sunken px-3 py-2.5">
             <p className="text-body text-ink">
               <span className="tabular font-semibold">{plan.totalPages}</span>{" "}
@@ -186,9 +229,9 @@ export function ExportDialog({
                 : "The whole timeline fits one page width."}
             </p>
           </div>
-        ) : (
+        ) : format === "pdf" ? (
           <p className="text-caption text-critical">This combination cannot be laid out.</p>
-        )}
+        ) : null}
 
         {error ? (
           <p role="alert" className="rounded-sm bg-critical/10 px-3 py-2 text-caption text-critical">

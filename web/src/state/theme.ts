@@ -52,6 +52,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   projectTheme: "midnight",
   active: readStored() ?? "midnight",
 
+  /*
+   * These only update state. Putting the DOM write in one effect that watches
+   * `active` (see App) means the order in which a caller happens to set the
+   * override and the project theme cannot produce a stale or flickering
+   * result - a real bug when both changed in the same handler.
+   */
   setOverride: (theme) => {
     try {
       if (theme) localStorage.setItem(STORAGE_KEY, theme);
@@ -59,17 +65,14 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     } catch {
       /* Storage is optional; the theme still applies for this session. */
     }
-    const active = theme ?? get().projectTheme;
-    apply(active);
-    set({ override: theme, active });
+    set({ override: theme, active: theme ?? get().projectTheme });
   },
 
-  setProjectTheme: (theme) => {
-    const active = get().override ?? theme;
-    apply(active);
-    set({ projectTheme: theme, active });
-  },
+  setProjectTheme: (theme) => set({ projectTheme: theme, active: get().override ?? theme }),
 }));
+
+/** The only place that writes the theme to the document. */
+export const applyTheme = apply;
 
 /** Applies the stored theme once at startup, before the first render. */
 export function initTheme(): void {

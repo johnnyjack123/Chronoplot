@@ -190,6 +190,26 @@ export function DatePicker({
     );
   };
 
+  /*
+   * Scrolling pages the grid. Reaching a distant decade by clicking an arrow
+   * ten times is what makes a picker feel like a form rather than a tool, and
+   * at century range the arrows alone are unusable. Registered directly because
+   * React attaches wheel listeners passively, where preventDefault does nothing.
+   */
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = gridRef.current;
+    if (!element || !open) return;
+
+    const handler = (event: WheelEvent): void => {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      step(event.deltaY > 0 ? 1 : -1);
+    };
+    element.addEventListener("wheel", handler, { passive: false });
+    return () => element.removeEventListener("wheel", handler);
+  });
+
   const gridButton = cn(
     "flex items-center justify-center rounded-md text-body",
     "transition-colors duration-[var(--dur-instant)] ease-standard",
@@ -248,6 +268,7 @@ export function DatePicker({
         />
       </div>
 
+      <div ref={gridRef}>
       <div className="mb-1.5 flex items-center gap-1">
         <button
           type="button"
@@ -393,6 +414,8 @@ export function DatePicker({
           ))}
         </div>
       )}
+
+      </div>
 
       <div className="mt-2 flex justify-between border-t border-line pt-2">
         <button

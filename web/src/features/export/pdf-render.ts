@@ -329,22 +329,30 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
               }
             }
 
+            /*
+             * Which side the title sits on was decided by the packer, which
+             * reserved the space for it. Deciding again here would put labels
+             * where nothing was set aside for them.
+             */
             pdf.setFontSize(6.5);
-            if (width >= 12) {
+            const baseline = y + placed.height / 2 + 1;
+            if (placed.labelSide === "inside") {
               pdf.setTextColor(cardTextHex(placed.item.color));
-              pdf.text(
-                fit(pdf, placed.item.title, width - 3),
-                plotLeft + clippedLeft + 1.5,
-                y + placed.height / 2 + 1,
-              );
-            } else {
-              // Too narrow to hold its label, so the label goes beside it - the
-              // same rule the screen renderer follows.
+              pdf.text(fit(pdf, placed.item.title, width - 3), plotLeft + clippedLeft + 1.5, baseline);
+            } else if (placed.labelSide === "right") {
               pdf.setTextColor(ink);
               pdf.text(
                 fit(pdf, placed.item.title, sliceWidth - clippedRight - 2),
                 plotLeft + clippedRight + 1.5,
-                y + placed.height / 2 + 1,
+                baseline,
+              );
+            } else {
+              pdf.setTextColor(ink);
+              pdf.text(
+                fit(pdf, placed.item.title, Math.max(0, clippedLeft - 2)),
+                plotLeft + clippedLeft - 1.5,
+                baseline,
+                { align: "right" },
               );
             }
           }

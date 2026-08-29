@@ -1,13 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/cn";
-import { commands, useEditorStore } from "@/state/editor-store";
+import { useEditorStore } from "@/state/editor-store";
 import { useSyncStore, type SyncStatus } from "@/state/sync";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Popover";
 import { ThemeSwitcher } from "@/features/theme/ThemeSwitcher";
 import {
-  AlertIcon, ArrowLeftIcon, BarIcon, CheckIcon, CloudIcon, DownloadIcon, GroupIcon,
-  PlusIcon, RedoIcon, ShareIcon, UndoIcon, ZoomInIcon, ZoomOutIcon,
+  AlertIcon, ArrowLeftIcon, CheckIcon, CloudIcon, DownloadIcon, MagnetIcon,
+  RedoIcon, ShareIcon, UndoIcon, ZoomInIcon, ZoomOutIcon,
 } from "@/components/icons";
 
 /** Zoom steps, so the buttons move by a sensible ratio rather than a fixed amount. */
@@ -50,7 +50,7 @@ export function Toolbar({
   readOnly: boolean;
 }) {
   const navigate = useNavigate();
-  const { title, setTitle, unitsPerDay, setZoom, zoomToFit, undo, redo, past, future } =
+  const { title, setTitle, unitsPerDay, requestZoom, snapping, setSnapping, undo, redo, past, future } =
     useEditorStore();
   const { status, message } = useSyncStore();
 
@@ -91,38 +91,35 @@ export function Toolbar({
 
       <div className="mx-1 h-5 w-px shrink-0 bg-line" />
 
-      <Button
-        icon={<PlusIcon />}
-        disabled={readOnly}
-        onClick={() => commands.addRow()}
-        className="hidden sm:inline-flex"
-      >
-        Lane
-      </Button>
-      <Tooltip content="Add a lane">
-        <IconButton label="Add lane" disabled={readOnly} onClick={() => commands.addRow()} className="sm:hidden">
-          <BarIcon />
-        </IconButton>
-      </Tooltip>
-      <Tooltip content="Add a group">
-        <IconButton label="Add group" disabled={readOnly} onClick={() => commands.addGroup()}>
-          <GroupIcon />
+      {/*
+        Magnetic snapping. A toggle rather than a modifier key because it is a
+        way of working, not a one-off override - and it needs to be visible, so
+        an edge that jumps by a few days is explained rather than mysterious.
+      */}
+      <Tooltip content={snapping ? "Snapping on: edges latch onto neighbours" : "Snapping off"}>
+        <IconButton
+          label="Snap to other cards"
+          active={snapping}
+          disabled={readOnly}
+          onClick={() => setSnapping(!snapping)}
+        >
+          <MagnetIcon />
         </IconButton>
       </Tooltip>
 
       <div className="ml-auto flex items-center gap-1">
         <Tooltip content="Zoom out (Ctrl+−, or Ctrl+scroll)">
-          <IconButton label="Zoom out" onClick={() => setZoom(unitsPerDay / ZOOM_FACTOR)}>
+          <IconButton label="Zoom out" onClick={() => requestZoom(unitsPerDay / ZOOM_FACTOR)}>
             <ZoomOutIcon />
           </IconButton>
         </Tooltip>
         <Tooltip content="Zoom in (Ctrl++, or Ctrl+scroll)">
-          <IconButton label="Zoom in" onClick={() => setZoom(unitsPerDay * ZOOM_FACTOR)}>
+          <IconButton label="Zoom in" onClick={() => requestZoom(unitsPerDay * ZOOM_FACTOR)}>
             <ZoomInIcon />
           </IconButton>
         </Tooltip>
         <Tooltip content="Fit the whole timeline on screen (Ctrl+0)">
-          <Button size="sm" onClick={zoomToFit}>
+          <Button size="sm" onClick={() => requestZoom("fit")}>
             Fit
           </Button>
         </Tooltip>

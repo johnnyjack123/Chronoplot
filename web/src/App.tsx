@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { TooltipProvider } from "./components/ui/Popover";
 import { useSessionStore } from "./state/session";
+import { applyTheme, useThemeStore } from "./state/theme";
 import { AuthPage } from "./features/auth/AuthPage";
 import { ProjectsPage } from "./features/projects/ProjectsPage";
 import { EditorPage } from "./features/editor/EditorPage";
@@ -30,10 +31,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export function App() {
   const refresh = useSessionStore((state) => state.refresh);
+  const activeTheme = useThemeStore((state) => state.active);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // One place applies the theme, derived from state rather than set by whoever
+  // last changed it.
+  useEffect(() => {
+    applyTheme(activeTheme);
+  }, [activeTheme]);
 
   return (
     <BrowserRouter>

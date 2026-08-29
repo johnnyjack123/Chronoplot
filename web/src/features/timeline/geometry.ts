@@ -13,7 +13,7 @@ import type { Granularity, Item, Precision, TimelineDoc } from "@shared";
 import {
   addDays, addMonths, addYears, clampDate, daysBetween, endOfMonth, endOfQuarter, endOfYear,
   formatMonth, inclusiveDays, isoWeekNumber, isWeekend, quarterOf, startOfMonth,
-  startOfQuarter, startOfWeek, startOfYear, toIso, toTime, type IsoDate,
+  startOfQuarter, startOfWeek, startOfYear, toIso, toTime, today as todayIso, type IsoDate,
 } from "@/lib/dates";
 
 export interface LayoutOptions {
@@ -27,7 +27,22 @@ export interface LayoutOptions {
   groupHeaderHeight: number;
   /** Gap below a group's last lane, before the next group starts. */
   groupGap: number;
-}
+
+  /*
+   * Label metrics. A title that does not fit inside its bar is drawn beside it,
+   * and that text occupies space just as the bar does - so the packer has to
+   * know how wide it will be. These are in the caller's units, which is why the
+   * exporter supplies millimetre values.
+   */
+  /** Average glyph advance, used to estimate a label's width without measuring. */
+  labelCharWidth: number;
+  /** Space between a bar and a label drawn beside it. */
+  labelGap: number;
+  /** Smallest clear space left between two items on the same sub-line. */
+  minItemGap: number;
+  /** Horizontal padding for a label drawn inside its bar. */
+  labelInset: number;
+};
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
   unitsPerDay: 3,
@@ -36,6 +51,10 @@ export const DEFAULT_LAYOUT: LayoutOptions = {
   lanePadding: 6,
   groupHeaderHeight: 28,
   groupGap: 12,
+  labelCharWidth: 6.6,
+  labelGap: 8,
+  minItemGap: 6,
+  labelInset: 8,
 };
 
 /**
@@ -339,6 +358,9 @@ export function buildAxis(
 
 /* --------------------------------------------------------- vertical plan -- */
 
+/** Where an item's title is drawn relative to its bar. */
+export type LabelSide = "inside" | "right" | "left";
+
 export interface PlacedItem {
   item: Item;
   x: number;
@@ -347,6 +369,10 @@ export interface PlacedItem {
   height: number;
   /** Which sub-line inside the lane this item was packed onto. */
   stack: number;
+  /** Decided by the packer, so screen and PDF agree on where the title goes. */
+  labelSide: LabelSide;
+  /** Estimated width of the title when drawn outside the bar. */
+  labelWidth: number;
 }
 
 export interface PlacedLane {
@@ -377,36 +403,103 @@ export interface Layout {
 }
 
 /**
- * Greedy interval partitioning: each item goes on the first sub-line whose last
- * item has already ended. Overlapping bars therefore stack instead of hiding
- * each other, and a lane grows only as tall as it needs to be.
+ * Rough width of a string, without touching the DOM.
  *
- * Items must be sorted by start date for this to be optimal, which is why the
- * caller sorts first.
+ * Measuring properly would mean a canvas context on screen and font metrics in
+ * the exporter - two different answers for the same layout, which is exactly
+ * what this module exists to prevent. An average advance is close enough to
+ * decide whether a title fits, and both renderers then trim to their own real
+ * metrics.
  */
-function packStacks(items: Item[]): Map<string, number> {
-  const lastEnd: number[] = [];
-  const assignment = new Map<string, number>();
+export function estimateLabelWidth(text: string, charWidth: number): number {
+  return text.length * charWidth;
+}
 
-  for (const item of items) {
-    const startTime = toTime(item.start);
-    let placed = false;
-    for (let line = 0; line < lastEnd.length; line++) {
-      // A bar ending on the 5th and one starting on the 5th would visually
-      // touch, so require a clear day between them.
-      if ((lastEnd[line] ?? -Infinity) < startTime) {
-        assignment.set(item.id, line);
-        lastEnd[line] = toTime(item.end);
-        placed = true;
-        break;
-      }
+interface Packed {
+  stack: number;
+  labelSide: LabelSide;
+  labelWidth: number;
+}
+
+/**
+ * Packs a lane's items onto sub-lines, taking their titles into account.
+ *
+ * A title too long for its bar is drawn beside it, and that text takes up room
+ * exactly as the bar does. Ignoring it is what lets a label sit on top of the
+ * next card. So each item claims an interval covering its bar *and* its label,
+ * and an item that cannot claim one on a line drops to the next - the same rule
+ * that already separated overlapping bars, extended to the text.
+ *
+ * The label goes right by default and left when the right would run past the
+ * end of the timeline or collide with the following item. Items must be sorted
+ * by start date, which the caller guarantees.
+ */
+function packLane(
+  items: Item[],
+  options: LayoutOptions,
+  timelineStart: IsoDate,
+  timelineWidth: number,
+): Map<string, Packed> {
+  const { unitsPerDay, labelGap, minItemGap, labelInset, labelCharWidth, cardHeight } = options;
+
+  /** Rightmost point claimed on each sub-line so far. */
+  const claimed: number[] = [];
+  const result = new Map<string, Packed>();
+
+  items.forEach((item, index) => {
+    const x = xOf(item.start, timelineStart, unitsPerDay);
+    // A milestone is a point in the model but a diamond on screen, so it claims
+    // the diamond's width - otherwise two milestones a day apart overlap at any
+    // zoom below one pixel per day.
+    const barWidth =
+      item.kind === "milestone"
+        ? cardHeight * 0.62
+        : widthOf(item.start, item.end, unitsPerDay);
+
+    const textWidth = estimateLabelWidth(item.title, labelCharWidth);
+    const fitsInside = item.kind !== "milestone" && textWidth + labelInset * 2 <= barWidth;
+    const labelWidth = fitsInside ? 0 : textWidth + labelGap;
+
+    let preferLeft = false;
+    if (!fitsInside) {
+      // No room on the right if the label would run off the end of the plot...
+      const overflowsEnd = x + barWidth + labelWidth > timelineWidth;
+      // ...or if the next item would sit underneath it.
+      const next = items[index + 1];
+      const collidesWithNext =
+        next !== undefined &&
+        xOf(next.start, timelineStart, unitsPerDay) < x + barWidth + labelWidth + minItemGap;
+      preferLeft = overflowsEnd || collidesWithNext;
     }
-    if (!placed) {
-      assignment.set(item.id, lastEnd.length);
-      lastEnd.push(toTime(item.end));
+
+    const place = (line: number, side: LabelSide): boolean => {
+      const leftEdge = side === "left" ? x - labelWidth : x;
+      const rightEdge = side === "right" ? x + barWidth + labelWidth : x + barWidth;
+      const free = leftEdge >= (claimed[line] ?? -Infinity) + minItemGap;
+      if (!free) return false;
+      claimed[line] = rightEdge;
+      result.set(item.id, { stack: line, labelSide: side, labelWidth });
+      return true;
+    };
+
+    const sides: LabelSide[] = fitsInside
+      ? ["inside"]
+      : preferLeft
+        ? ["left", "right"]
+        : ["right", "left"];
+
+    for (let line = 0; line < claimed.length; line++) {
+      if (sides.some((side) => place(line, side))) return;
     }
-  }
-  return assignment;
+
+    // Nothing fitted, so open a new sub-line. A left label there would hang
+    // over empty space to the left, which reads worse than one on the right.
+    const line = claimed.length;
+    claimed.push(-Infinity);
+    place(line, fitsInside ? "inside" : preferLeft && x - labelWidth >= 0 ? "left" : "right");
+  });
+
+  return result;
 }
 
 /**
@@ -432,10 +525,12 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
   const groups: PlacedGroup[] = [];
   let y = 0;
 
+  const plotWidth = totalWidth(doc, unitsPerDay);
+
   const emitLane = (row: { id: string; title: string; groupId: string | null }): void => {
     const items = itemsByRow.get(row.id) ?? [];
-    const stacks = packStacks(items);
-    const stackCount = Math.max(1, ...[...stacks.values()].map((n) => n + 1));
+    const packed = packLane(items, options, timelineStart, plotWidth);
+    const stackCount = Math.max(1, ...[...packed.values()].map((entry) => entry.stack + 1));
     const height = lanePadding * 2 + stackCount * cardHeight + (stackCount - 1) * cardGap;
 
     lanes.push({
@@ -445,14 +540,16 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
       y,
       height,
       items: items.map((item) => {
-        const stack = stacks.get(item.id) ?? 0;
+        const entry = packed.get(item.id) ?? { stack: 0, labelSide: "inside" as const, labelWidth: 0 };
         return {
           item,
           x: xOf(item.start, timelineStart, unitsPerDay),
           width: widthOf(item.start, item.end, unitsPerDay),
-          y: y + lanePadding + stack * (cardHeight + cardGap),
+          y: y + lanePadding + entry.stack * (cardHeight + cardGap),
           height: cardHeight,
-          stack,
+          stack: entry.stack,
+          labelSide: entry.labelSide,
+          labelWidth: entry.labelWidth,
         };
       }),
     });
@@ -533,6 +630,58 @@ export function snapDrag(
   // covers whole months, even after repeated drags.
   const end = precision === "month" ? endOfMonth(step(start, Math.round(duration / unitDays))) : endOfYear(step(start, Math.round(duration / unitDays)));
   return { start, end: end < start ? start : end };
+}
+
+/* --------------------------------------------------------------- snapping -- */
+
+/**
+ * Dates a dragged card can latch onto: every other card's start and the day
+ * after its end, plus today and the ends of the timeline.
+ *
+ * "The day after its end" rather than its end, because ranges here are
+ * inclusive - a card ending on the 5th and one starting on the 6th are flush,
+ * and that is what butting two cards together should produce.
+ */
+export function collectSnapTargets(doc: TimelineDoc, excludeItemId?: string): IsoDate[] {
+  const targets = new Set<IsoDate>([doc.settings.start, addDays(doc.settings.end, 1)]);
+
+  for (const item of doc.items) {
+    if (item.id === excludeItemId) continue;
+    targets.add(item.start);
+    targets.add(addDays(item.end, 1));
+  }
+  if (doc.settings.showToday) targets.add(todayIso());
+
+  return [...targets];
+}
+
+/**
+ * How far to nudge a dragged item so one of its edges lands on a target.
+ *
+ * Returns a shift in whole days, or 0 when nothing is close enough. The
+ * threshold is in screen units, so snapping feels the same at every zoom rather
+ * than covering months when zoomed out.
+ */
+export function snapOffsetDays(
+  edges: IsoDate[],
+  targets: IsoDate[],
+  unitsPerDay: number,
+  thresholdPx = 9,
+): number {
+  let best = 0;
+  let bestDistance = Infinity;
+
+  for (const edge of edges) {
+    for (const target of targets) {
+      const days = daysBetween(edge, target);
+      const distance = Math.abs(days * unitsPerDay);
+      if (distance <= thresholdPx && distance < bestDistance) {
+        bestDistance = distance;
+        best = days;
+      }
+    }
+  }
+  return best;
 }
 
 /** Clamps an item to the timeline window, keeping its length where possible. */

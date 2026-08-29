@@ -45,8 +45,8 @@
   --accent-ink: #07091a;
   --accent-soft: rgb(109 140 255 / 0.14);
 
-  --grid-line: rgb(255 255 255 / 0.05);
-  --grid-line-strong: rgb(255 255 255 / 0.11);
+  --grid-line: rgb(255 255 255 / 0.1);
+  --grid-line-strong: rgb(255 255 255 / 0.2);
 
   --shadow-color: rgb(0 0 0 / 0.5);
 }
@@ -74,8 +74,8 @@
   --accent-ink: #1a1206;
   --accent-soft: rgb(224 160 58 / 0.14);
 
-  --grid-line: rgb(255 255 255 / 0.05);
-  --grid-line-strong: rgb(255 255 255 / 0.11);
+  --grid-line: rgb(255 255 255 / 0.1);
+  --grid-line-strong: rgb(255 255 255 / 0.2);
 
   --shadow-color: rgb(0 0 0 / 0.55);
 }
@@ -103,8 +103,8 @@
   --accent-ink: #04211b;
   --accent-soft: rgb(47 212 176 / 0.14);
 
-  --grid-line: rgb(190 255 240 / 0.05);
-  --grid-line-strong: rgb(190 255 240 / 0.11);
+  --grid-line: rgb(190 255 240 / 0.1);
+  --grid-line-strong: rgb(190 255 240 / 0.2);
 
   --shadow-color: rgb(0 0 0 / 0.55);
 }
@@ -132,8 +132,8 @@
   --accent-ink: #ffffff;
   --accent-soft: rgb(48 85 216 / 0.1);
 
-  --grid-line: rgb(14 20 32 / 0.06);
-  --grid-line-strong: rgb(14 20 32 / 0.13);
+  --grid-line: rgb(14 20 32 / 0.11);
+  --grid-line-strong: rgb(14 20 32 / 0.22);
 
   --shadow-color: rgb(14 20 32 / 0.1);
 }
@@ -161,8 +161,8 @@
   --accent-ink: #fffaf3;
   --accent-soft: rgb(168 98 42 / 0.11);
 
-  --grid-line: rgb(36 31 24 / 0.07);
-  --grid-line-strong: rgb(36 31 24 / 0.14);
+  --grid-line: rgb(36 31 24 / 0.12);
+  --grid-line-strong: rgb(36 31 24 / 0.24);
 
   --shadow-color: rgb(60 44 26 / 0.12);
 }

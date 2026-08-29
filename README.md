@@ -55,6 +55,14 @@ cannot drift from what you arranged.
 pixelates, and page breaks land on calendar boundaries where one is close enough
 to the page edge. A one-page A4 export of a busy year is around 9 KB.
 
+**HTML export** produces one self-contained file — no fonts, scripts or styles
+fetched from anywhere — so it works offline, inside an Obsidian note, or in an
+`<iframe>` on a site with a strict content policy. Drag to pan, scroll to zoom,
+hover a card for its exact dates. Zooming transforms the drawing rather than
+re-laying it out, which is why text scales like a map instead of staying a fixed
+size; the hover detail is where the precision lives. Every piece of user text is
+escaped on the way out.
+
 ### Docker
 
 ```bash
@@ -120,6 +128,8 @@ node server/test/smoke.mjs                                        # needs the se
 npx tsx --tsconfig web/tsconfig.json web/test/dates.test.ts       # calendar maths
 npx tsx --tsconfig web/tsconfig.json web/test/axis.test.ts        # axis windowing + zoom
 npx tsx --tsconfig web/tsconfig.json web/test/reorder.test.ts     # lane and group ordering
+npx tsx --tsconfig web/tsconfig.json web/test/packing.test.ts     # label placement + snapping
+npx tsx --tsconfig web/tsconfig.json web/test/html-export.test.ts # HTML output + escaping
 npx tsx --tsconfig web/tsconfig.json web/test/pdf-plan.test.ts    # pagination
 ```
 

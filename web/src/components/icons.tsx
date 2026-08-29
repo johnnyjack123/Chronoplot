@@ -168,6 +168,14 @@ export const AlertIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const MagnetIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.25 3v4.75a4.75 4.75 0 0 0 9.5 0V3" />
+    <path d="M3.25 7.25h3.5M9.25 7.25h3.5" />
+    <path d="M3.25 3h3.5M9.25 3h3.5" />
+  </Icon>
+);
+
 export const CloudIcon = (p: IconProps) => (
   <Icon {...p}><path d="M4.75 12.25a3 3 0 0 1-.3-5.98 3.75 3.75 0 0 1 7.2-.77 2.75 2.75 0 0 1 .1 5.47" /><path d="M4.75 12.25h7" /></Icon>
 );

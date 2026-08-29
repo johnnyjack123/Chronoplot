@@ -452,7 +452,9 @@ function GroupInspector({ groupId, readOnly }: { groupId: string; readOnly: bool
 /* -------------------------------------------------------------- settings -- */
 
 function TimelineSettings({ doc, readOnly }: { doc: TimelineDoc; readOnly: boolean }) {
-  const { setProjectTheme, setOverride, override } = useThemeStore();
+  const { setOverride, override } = useThemeStore();
+  const snapping = useEditorStore((state) => state.snapping);
+  const setSnapping = useEditorStore((state) => state.setSnapping);
 
   return (
     <>
@@ -530,19 +532,28 @@ function TimelineSettings({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
         />
       </PanelSection>
 
+      <PanelSection title="Editing">
+        <Switch
+          checked={snapping}
+          onChange={setSnapping}
+          label="Snap to other cards"
+          hint="Dragged edges latch onto neighbouring cards and today. Yours only, not part of the project."
+        />
+      </PanelSection>
+
       <PanelSection title="Project theme">
         <Select<ThemeName>
           value={doc.settings.theme}
           onChange={(theme) => {
-            commands.updateSettings({ theme });
             /*
-             * Also drop any personal override. Choosing the project theme is a
-             * statement about how this timeline should look, and previously the
-             * override silently won - so the control appeared to do nothing at
-             * all for anyone who had ever used the theme switcher.
+             * Drop any personal override first. Choosing the project theme is a
+             * statement about how this timeline should look, and the override
+             * silently outranks it - which is why the control appeared to do
+             * nothing for anyone who had used the theme switcher. Applying the
+             * theme itself is the editor's job, driven by the document.
              */
             setOverride(null);
-            setProjectTheme(theme);
+            commands.updateSettings({ theme });
           }}
           options={THEMES.map((theme) => ({
             value: theme.name,
