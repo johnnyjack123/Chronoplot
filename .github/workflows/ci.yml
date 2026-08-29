@@ -50,13 +50,15 @@ jobs:
       - name: Smoke test against the production build
         env:
           NODE_ENV: production
-          # Throwaway: this server exists for the length of one job and is
-          # never reachable from outside it.
-          SESSION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef
           DATABASE_URL: /tmp/ci-smoke.sqlite
           APP_ORIGIN: http://localhost:5188
           PORT: "5188"
         run: |
+          # Generated per run rather than written into the file. This server
+          # lives for one job and is unreachable from outside it, so a literal
+          # would be harmless - but nothing credential-shaped belongs in a
+          # repository, if only so that scanning for such things stays useful.
+          export SESSION_SECRET="$(openssl rand -hex 32)"
           npm start &
           server=$!
           # Wait for the port rather than sleeping a guessed number of seconds.
