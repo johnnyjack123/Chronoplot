@@ -1,0 +1,12 @@
+# Files that are read by Linux tooling keep LF even when checked out on
+# Windows. A Dockerfile with CRLF line endings is the classic case: the RUN
+# steps here use backslash continuations, and a carriage return after one has
+# historically broken parsers. Modern BuildKit copes, but there is no reason to
+# rely on that when building from a Windows working tree under WSL.
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf
+docker-compose.yml text eol=lf
+*.sh            text eol=lf
+
+# Everything else follows the platform default.
+* text=auto

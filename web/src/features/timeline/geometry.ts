@@ -598,6 +598,49 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
   };
 }
 
+export interface LaneColumnOptions {
+  /** Average glyph advance for a lane name. */
+  charWidth: number;
+  /** Average glyph advance for a group heading, which is bold and uppercase. */
+  groupCharWidth: number;
+  /** Extra indent a lane inside a group is drawn with. */
+  indent: number;
+  /** Padding either side of the text. */
+  padding: number;
+  min: number;
+  /** Ceiling, so one very long name cannot swallow the whole page. */
+  max: number;
+}
+
+/**
+ * How wide the lane-name column has to be for its longest label to fit.
+ *
+ * The exports used to hard-code this, which meant a lane called anything longer
+ * than the guess was simply cut off. Deriving it from the actual labels is the
+ * only way "everything is visible" can hold for names nobody has typed yet.
+ *
+ * Collapsed groups are excluded because their lanes are not drawn - an
+ * invisible label should not widen the column.
+ */
+export function laneColumnWidth(doc: TimelineDoc, options: LaneColumnOptions): number {
+  // Taken from the document rather than a computed layout: the answer depends
+  // only on the labels, so it must not depend on the horizontal scale - and the
+  // page planner needs it *before* it can choose one.
+  const collapsed = new Set(doc.groups.filter((group) => group.collapsed).map((group) => group.id));
+
+  let widest = 0;
+  for (const row of doc.rows) {
+    if (row.groupId !== null && collapsed.has(row.groupId)) continue;
+    const indent = row.groupId !== null ? options.indent : 0;
+    widest = Math.max(widest, indent + row.title.length * options.charWidth);
+  }
+  for (const group of doc.groups) {
+    widest = Math.max(widest, group.title.length * options.groupCharWidth);
+  }
+
+  return Math.min(options.max, Math.max(options.min, widest + options.padding));
+}
+
 /** Looks up a placed item by id without re-walking the whole layout. */
 export function findPlacedItem(layoutResult: Layout, itemId: string): PlacedItem | undefined {
   for (const lane of layoutResult.lanes) {

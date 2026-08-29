@@ -19,7 +19,8 @@
 import type { ThemeName, TimelineDoc } from "@shared";
 import { formatWithPrecision, inclusiveDays, today } from "@/lib/dates";
 import {
-  buildAxis, layout as computeLayout, xOf, findPlacedItem, type Layout, type PlacedItem,
+  buildAxis, laneColumnWidth, layout as computeLayout, xOf, findPlacedItem,
+  type Layout, type PlacedItem,
 } from "@/features/timeline/geometry";
 import { linkPath } from "@/features/timeline/Links";
 import {
@@ -46,7 +47,22 @@ const HTML_LAYOUT = {
   labelInset: 8,
 };
 
-const LANE_LABEL_WIDTH = 168;
+/**
+ * Metrics for the lane-name column, in SVG user units.
+ *
+ * Lane names are 12px, group headings 10px bold uppercase - hence the wider
+ * per-glyph figure for those. The column is sized from the labels themselves;
+ * a fixed width simply cut off any name longer than the guess.
+ */
+const LANE_COLUMN = {
+  charWidth: 6.4,
+  groupCharWidth: 6.8,
+  indent: 10,
+  padding: 20,
+  min: 90,
+  max: 420,
+};
+
 const AXIS_HEIGHT = 44;
 const PADDING = 16;
 /** Width the timeline is laid out at before any zooming. */
@@ -143,7 +159,7 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
 
     const plotWidth = Math.max(layout.totalWidth, 1);
     const plotHeight = Math.max(layout.totalHeight, 1);
-    const labelWidth = options.showLaneLabels ? LANE_LABEL_WIDTH : 0;
+    const labelWidth = options.showLaneLabels ? laneColumnWidth(doc, LANE_COLUMN) : 0;
     const totalWidth = labelWidth + plotWidth + PADDING * 2;
     const totalHeight = AXIS_HEIGHT + plotHeight + PADDING * 2;
 

@@ -97,6 +97,29 @@ for (const hook of ["cp-stage", "cp-surface", "cp-tip", "cp-fit", "cp-in", "cp-o
 check("wheel zoom is registered", html.includes('addEventListener("wheel"'));
 check("pan is registered", html.includes('addEventListener("pointerdown"'));
 
+/* 5b. The lane column grows with the longest label rather than clipping it. */
+{
+  const wide = buildHtml(
+    {
+      ...doc,
+      rows: [{ id: "r1", groupId: null, title: "Distribution network reinforcement programme" }],
+      items: [],
+      groups: [],
+      links: [],
+    },
+    { title: "T", theme: "midnight", showLaneLabels: true },
+  );
+  const narrow = buildHtml(
+    { ...doc, rows: [{ id: "r1", groupId: null, title: "Ops" }], items: [], groups: [], links: [] },
+    { title: "T", theme: "midnight", showLaneLabels: true },
+  );
+
+  const widthOf = (html: string): number => Number(/<svg[^>]*\swidth="(\d+(?:\.\d+)?)"/.exec(html)?.[1] ?? 0);
+  check("a long lane name widens the drawing", widthOf(wide) > widthOf(narrow),
+    `${widthOf(narrow)} -> ${widthOf(wide)}`);
+  check("the long name is present in full", wide.includes("Distribution network reinforcement programme"));
+}
+
 /* 6. Turning lane labels off removes them. */
 {
   const bare = buildHtml(doc, { title: "T", theme: "daylight", showLaneLabels: false });

@@ -9,7 +9,7 @@
  */
 import type { ThemeName, TimelineDoc } from "@shared";
 import { inclusiveDays } from "@/lib/dates";
-import { buildAxis, layout as computeLayout } from "@/features/timeline/geometry";
+import { buildAxis, laneColumnWidth, layout as computeLayout } from "@/features/timeline/geometry";
 
 export type PageSize = "a4" | "a3" | "letter";
 export type Orientation = "portrait" | "landscape";
@@ -44,9 +44,36 @@ export const PAGE_SIZES: Record<PageSize, { width: number; height: number; label
 };
 
 export const MARGIN = 12;
-export const LANE_LABEL_WIDTH = 34;
 export const AXIS_HEIGHT = 11;
 export const FOOTER_HEIGHT = 7;
+
+/**
+ * Metrics for the lane-name column, in millimetres.
+ *
+ * Lane names print at 7pt Helvetica, group headings at 7pt bold uppercase -
+ * which is why they get their own, wider, per-glyph figure. The ceiling stops a
+ * single very long name from swallowing the page; only past that does anything
+ * get trimmed.
+ */
+export const LANE_COLUMN = {
+  charWidth: 1.45,
+  groupCharWidth: 1.75,
+  indent: 2,
+  padding: 5,
+  min: 22,
+  /** Fraction of the usable page width the column may take at most. */
+  maxFraction: 0.45,
+};
+
+/** Width of the lane-name column for this document, on this page. */
+export function laneLabelWidth(doc: TimelineDoc, options: ExportOptions): number {
+  if (!options.repeatLaneLabels) return 0;
+  const box = pageBox(options);
+  return laneColumnWidth(doc, {
+    ...LANE_COLUMN,
+    max: (box.width - MARGIN * 2) * LANE_COLUMN.maxFraction,
+  });
+}
 
 /**
  * Scales the axis coarsening thresholds for print. The page is measured in
@@ -98,6 +125,8 @@ export interface PagePlan {
   mmPerDay: number;
   plotWidth: number;
   plotHeight: number;
+  /** Width the renderer must use for the lane column, so both agree. */
+  labelWidth: number;
 }
 
 /**
@@ -113,7 +142,7 @@ export interface PagePlan {
  */
 export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
   const box = pageBox(options);
-  const labelWidth = options.repeatLaneLabels ? LANE_LABEL_WIDTH : 0;
+  const labelWidth = laneLabelWidth(doc, options);
   const availableWidth = box.width - MARGIN * 2 - labelWidth;
   const availableHeight = box.height - MARGIN * 2 - AXIS_HEIGHT - FOOTER_HEIGHT;
 
@@ -178,5 +207,6 @@ export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
     mmPerDay,
     plotWidth: built.totalWidth,
     plotHeight: built.totalHeight,
+    labelWidth,
   };
 }

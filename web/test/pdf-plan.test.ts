@@ -169,5 +169,57 @@ const baseOptions: ExportOptions = {
     `${wide.columns.length} vs ${narrow.columns.length}`);
 }
 
+/* 10. The lane-name column sizes itself to the longest label. A fixed width
+ *     simply cut off any name longer than the guess. */
+{
+  const short = planPages(makeDoc({ rows: [{ id: "r", groupId: null, title: "Ops" }] }), baseOptions);
+  const long = planPages(
+    makeDoc({
+      rows: [{ id: "r", groupId: null, title: "Distribution network reinforcement programme" }],
+    }),
+    baseOptions,
+  );
+
+  check("a longer lane name widens the column", long.labelWidth > short.labelWidth,
+    `${short.labelWidth.toFixed(1)} -> ${long.labelWidth.toFixed(1)}`);
+  check("a short name still gets a minimum", short.labelWidth >= 22, String(short.labelWidth));
+  check("a wider column leaves less room for the plot", long.plotWidth < short.plotWidth,
+    `${long.plotWidth.toFixed(1)} vs ${short.plotWidth.toFixed(1)}`);
+
+  // One absurd name must not consume the page.
+  const absurd = planPages(
+    makeDoc({ rows: [{ id: "r", groupId: null, title: "x".repeat(400) }] }),
+    baseOptions,
+  );
+  const usable = 297 - 12 * 2; // A4 landscape width less margins
+  check("an absurd name is capped", absurd.labelWidth <= usable * 0.46,
+    `${absurd.labelWidth.toFixed(1)} of ${usable}`);
+
+  // Group headings are bold and uppercase, so they count too.
+  const grouped = planPages(
+    makeDoc({
+      groups: [{ id: "g", title: "Regulatory approvals and permitting", collapsed: false }],
+      rows: [{ id: "r", groupId: "g", title: "Ops" }],
+    }),
+    baseOptions,
+  );
+  check("a long group heading widens the column", grouped.labelWidth > short.labelWidth,
+    `${grouped.labelWidth.toFixed(1)}`);
+
+  // A collapsed group's lanes are not drawn, so they must not widen anything.
+  const collapsed = planPages(
+    makeDoc({
+      groups: [{ id: "g", title: "P", collapsed: true }],
+      rows: [{ id: "r", groupId: "g", title: "A very long hidden lane name indeed" }],
+    }),
+    baseOptions,
+  );
+  check("hidden lanes do not widen the column", collapsed.labelWidth <= short.labelWidth + 0.01,
+    `${collapsed.labelWidth.toFixed(1)} vs ${short.labelWidth.toFixed(1)}`);
+
+  check("turning labels off removes the column",
+    planPages(makeDoc(), { ...baseOptions, repeatLaneLabels: false }).labelWidth === 0);
+}
+
 console.log(failed === 0 ? "\nAll pagination checks passed" : `\n${failed} check(s) failed`);
 process.exit(failed === 0 ? 0 : 1);

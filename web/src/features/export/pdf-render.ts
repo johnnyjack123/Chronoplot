@@ -18,7 +18,7 @@ import {
   LANE_TINT_STRENGTH, resolveCardHex, resolveCardInkHex, resolveToken,
 } from "@/features/timeline/colors";
 import {
-  AXIS_HEIGHT, LANE_LABEL_WIDTH, MARGIN, PRINT_TICK_SCALE, pageBox, planPages, printLayout,
+  AXIS_HEIGHT, MARGIN, PRINT_TICK_SCALE, pageBox, planPages, printLayout,
   type ExportOptions,
 } from "./pdf-plan";
 
@@ -143,7 +143,9 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
       compress: true,
     });
 
-    const labelWidth = options.repeatLaneLabels ? LANE_LABEL_WIDTH : 0;
+    // Taken from the plan so the drawing and the pagination cannot disagree
+    // about how much room the lane names need.
+    const labelWidth = plan.labelWidth;
     const plotLeft = MARGIN + labelWidth;
     const plotTop = MARGIN + AXIS_HEIGHT;
 
@@ -285,7 +287,7 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(inkMuted);
           pdf.text(
-            fit(pdf, group.title.toUpperCase(), (labelWidth || 30) - 2),
+            fit(pdf, group.title.toUpperCase(), Math.max(20, labelWidth) - 2),
             MARGIN + 1,
             plotTop + (group.y - rowSlice.startY) + 4,
           );
@@ -308,7 +310,7 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
             pdf.setFontSize(7);
             pdf.setTextColor(ink);
             pdf.text(
-              fit(pdf, lane.title, LANE_LABEL_WIDTH - 3),
+              fit(pdf, lane.title, labelWidth - 3 - (lane.groupId ? 2 : 0)),
               MARGIN + (lane.groupId ? 3 : 1),
               plotTop + top + lane.height / 2 + 1,
             );
