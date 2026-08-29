@@ -22,12 +22,34 @@ cp env.example .env
 | `DATABASE_URL` | A file path for SQLite, a connection string for Postgres |
 | `SESSION_SECRET` | Signs CSRF tokens. At least 32 characters, or the server refuses to start in production |
 | `APP_ORIGIN` | Where the browser reaches this instance. Must match exactly, including scheme and port |
-| `ALLOW_REGISTRATION` | Only the *initial* value; after first boot the admin screen owns this setting |
+| `ALLOW_REGISTRATION` | Only the *initial* value — see below |
 
 In production the server serves the built browser app from its own origin. That
 is what lets the session cookie stay `SameSite=Lax` with no CORS exceptions — do
 not split the two across hosts without revisiting the cookie settings in
 `server/src/auth/plugin.ts`.
+
+### `ALLOW_REGISTRATION` is a starting position, not a switch
+
+It is read exactly once, on the first boot of an empty database, to seed the
+stored setting. From then on the admin screen owns it and the variable is
+ignored — changing it later does nothing.
+
+The compose file defaults it to **false**, unlike a local `npm run dev`. The
+first account to register becomes the administrator, so an instance that is
+briefly open on a public address is an instance a stranger can take ownership
+of. Closing it costs nothing: the first account is always allowed in regardless
+of the setting, and can open registration afterwards from the admin screen.
+
+`server/test/first-run.mjs` covers exactly that path, because if the exemption
+ever broke, a fresh locked-down instance would be permanently unusable and
+nothing else in the suite would notice:
+
+```bash
+DATABASE_URL=/tmp/first-run.sqlite ALLOW_REGISTRATION=false PORT=5187 \
+  APP_ORIGIN=http://localhost:5187 npm start &
+BASE=http://localhost:5187 ORIGIN=http://localhost:5187 node server/test/first-run.mjs
+```
 
 ---
 

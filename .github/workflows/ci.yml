@@ -80,6 +80,22 @@ jobs:
           # tears the server down with the job.
           BASE=http://localhost:5188 ORIGIN=http://localhost:5188 node server/test/smoke.mjs
 
+      - name: First run with registration closed
+        env:
+          NODE_ENV: production
+          DATABASE_URL: /tmp/ci-first-run.sqlite
+          APP_ORIGIN: http://localhost:5187
+          PORT: "5187"
+          ALLOW_REGISTRATION: "false"
+        run: |
+          export SESSION_SECRET="$(openssl rand -hex 32)"
+          npm start &
+          for _ in $(seq 1 40); do
+            curl -fsS http://localhost:5187/api/health >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          BASE=http://localhost:5187 ORIGIN=http://localhost:5187 node server/test/first-run.mjs
+
   build:
     name: Build ${{ matrix.platform }}
     needs: test
