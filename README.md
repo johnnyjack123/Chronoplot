@@ -125,9 +125,14 @@ as you drag.
 ### Docker
 
 ```bash
-cp env.example .env        # then set SESSION_SECRET to something random
-docker compose up -d --build
+docker build -t chronoplot:latest .   # produce the image
+cp env.example .env                   # set SESSION_SECRET to something random
+docker compose up -d                  # run it
 ```
+
+Building and running are separate: `docker-compose.yml` only describes how to
+*run* an image, so the same image can be built once, pushed to a registry, and
+run anywhere. The tag has to match the `image:` line in that file.
 
 Configuration comes from `.env` — the same file the server reads when run
 without Docker, so there is one place to configure it either way. Compose reads
@@ -144,12 +149,9 @@ reject every already-open browser tab with a 403 until it reloaded.
 lives on `chronoplot-data`, never in an image layer — losing that volume loses
 every project.
 
-```bash
-docker build -t chronoplot .        # image only
-```
-
-Building under WSL works from either filesystem; `.gitattributes` keeps the
-Dockerfile on LF endings so a Windows checkout does not upset the parser.
+Building under WSL works from either filesystem, though a clone on the Linux
+side is much faster than one reached through `/mnt/c`. `.gitattributes` keeps
+the Dockerfile on LF endings so a Windows checkout does not upset the parser.
 
 ### Backups
 
