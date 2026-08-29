@@ -32,6 +32,30 @@ node scripts/make-admin.mjs you@example.com --only   # and demote the rest
 screen cannot reach. It shows what would go before it goes, and refuses to leave
 the instance without an administrator.
 
+### Locked out
+
+If every administrator's password is lost, or registration is closed with no
+usable account behind it, the way back in is from the host:
+
+```bash
+node scripts/reset-password.mjs                       # list accounts
+node scripts/reset-password.mjs you@example.com       # set a generated password
+node scripts/reset-password.mjs you@example.com --admin   # and promote them
+```
+
+In a container: `docker compose exec chronoplot node scripts/reset-password.mjs …`
+
+The password is generated rather than prompted — it avoids a weak choice made
+under pressure, and keeps it out of shell history. Every existing session for
+that account is signed out, or the reset would achieve nothing against someone
+already signed in.
+
+**`ALLOW_REGISTRATION` is not an escape hatch.** It is read only when the stored
+setting does not yet exist, so setting it on a running instance changes nothing.
+Access to the database is the recovery credential — which for a self-hosted app
+is the right one: whoever runs the server can always get back in, and nobody
+else can.
+
 ---
 
 ## Editing

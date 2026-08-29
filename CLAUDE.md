@@ -32,6 +32,13 @@ and which are left for their visual pass.
 
 **English everywhere** in code, comments, UI text and commit messages.
 
+**`scripts/` are operator tools, and the recovery path.** `backup-db`,
+`check-migration`, `make-admin`, `reset-password`, `delete-accounts`,
+`audit-secrets`. They read `DATABASE_URL` from the environment or `.env`, and
+the destructive ones default to showing what they would do. Database access is
+deliberately the way back into a locked-out instance;
+`ALLOW_REGISTRATION` is *not* — it seeds the stored setting on first boot only.
+
 ---
 
 ## Commands
