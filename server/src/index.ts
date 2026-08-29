@@ -12,6 +12,7 @@ import { authPlugin } from "./auth/plugin.js";
 import { HttpError } from "./http-error.js";
 import { authRoutes } from "./routes/auth.js";
 import { projectRoutes } from "./routes/projects.js";
+import { adminRoutes } from "./routes/admin.js";
 
 const app = Fastify({
   logger: config.isProduction
@@ -90,6 +91,11 @@ await app.register(async (scope) => {
 await app.register(async (scope) => {
   scope.addHook("onRequest", scope.rateLimit({ max: 600, timeWindow: "1 minute" }));
   await projectRoutes(scope);
+});
+
+await app.register(async (scope) => {
+  scope.addHook("onRequest", scope.rateLimit({ max: 120, timeWindow: "1 minute" }));
+  await adminRoutes(scope);
 });
 
 /*

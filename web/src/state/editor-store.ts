@@ -343,6 +343,16 @@ export const commands = {
     });
   },
 
+  /** Tints a whole lane. `undefined` clears it back to no colour. */
+  setRowColor(rowId: string, color: number | undefined): void {
+    useEditorStore.getState().mutate((draft) => {
+      const row = draft.rows.find((candidate) => candidate.id === rowId);
+      if (!row) return;
+      if (color === undefined) delete row.color;
+      else row.color = color;
+    });
+  },
+
   setRowGroup(rowId: string, groupId: string | null): void {
     useEditorStore.getState().mutate((draft) => {
       const row = draft.rows.find((candidate) => candidate.id === rowId);

@@ -143,7 +143,90 @@ check("viewer can read shared project", r.status === 200, `status ${r.status}`);
 r = await call("PUT", `/api/projects/${projectId}`, { title: "Viewer edit", doc, baseVersion: version + 1 });
 check("viewer cannot write", r.status === 403 && r.json.error?.code === "read_only", `status ${r.status}`);
 
-// 16. owner deletes
+// 16. profile: the display name can be changed
+cookies = ownerCookies;
+r = await call("PATCH", "/api/auth/profile", { name: "Renamed Tester" });
+check("display name can be changed", r.status === 200 && r.json.user?.name === "Renamed Tester", JSON.stringify(r.json).slice(0, 120));
+r = await call("GET", "/api/auth/me");
+check("the new name persists", r.json.user?.name === "Renamed Tester", JSON.stringify(r.json.user));
+
+// 17. project export/import round-trip
+r = await call("GET", `/api/projects/${projectId}`);
+const exported = r.json.project.doc;
+r = await call("POST", "/api/projects/import", { title: "Imported copy", doc: exported });
+check("import creates a project", r.status === 200 && r.json.project?.id !== projectId, `status ${r.status}`);
+const importedId = r.json.project?.id;
+r = await call("GET", `/api/projects/${importedId}`);
+check(
+  "the imported project has the same content",
+  r.json.project?.doc?.items?.length === exported.items.length,
+  `${r.json.project?.doc?.items?.length} vs ${exported.items.length}`,
+);
+r = await call("POST", "/api/projects/import", { title: "Broken", doc: { schemaVersion: 1 } });
+check("a malformed import is rejected", r.status === 400, `status ${r.status}`);
+await call("DELETE", `/api/projects/${importedId}`);
+
+// 18. roles: whoever registered first administers the instance
+r = await call("GET", "/api/auth/me");
+const iAmAdmin = r.json.user?.role === "admin";
+check("an account has a role", r.json.user?.role === "admin" || r.json.user?.role === "user", String(r.json.user?.role));
+
+// A non-admin must not reach the admin API. Use the second account for that.
+const adminCookies = new Map(cookies);
+cookies = new Map();
+await call("POST", "/api/auth/login", { email: other, password });
+r = await call("GET", "/api/auth/me");
+const otherIsAdmin = r.json.user?.role === "admin";
+r = await call("GET", "/api/admin/users");
+check(
+  "a non-admin is refused the admin API",
+  otherIsAdmin ? r.status === 200 : r.status === 403,
+  `role ${r.json.user?.role ?? ""} status ${r.status}`,
+);
+
+cookies = adminCookies;
+if (iAmAdmin) {
+  r = await call("GET", "/api/admin/users");
+  check("admin lists accounts", r.status === 200 && Array.isArray(r.json.users), `status ${r.status}`);
+
+  const madeEmail = `made-${Date.now()}@example.com`;
+  r = await call("POST", "/api/admin/users", { name: "Made", email: madeEmail, password: "created-by-admin-pw", role: "user" });
+  check("admin creates an account", r.status === 200, JSON.stringify(r.json).slice(0, 120));
+  const madeId = r.json.user?.id;
+
+  r = await call("POST", `/api/admin/users/${madeId}/password`, { password: "reset-by-the-admin" });
+  check("admin resets a password", r.status === 200, `status ${r.status}`);
+
+  // The reset must actually take effect, and must invalidate the old one.
+  const keep = new Map(cookies);
+  cookies = new Map();
+  r = await call("POST", "/api/auth/login", { email: madeEmail, password: "created-by-admin-pw" });
+  check("the old password stops working", r.status === 401, `status ${r.status}`);
+  r = await call("POST", "/api/auth/login", { email: madeEmail, password: "reset-by-the-admin" });
+  check("the new password works", r.status === 200, `status ${r.status}`);
+  cookies = keep;
+
+  r = await call("DELETE", `/api/admin/users/${madeId}`);
+  check("admin deletes an account", r.status === 200, `status ${r.status}`);
+
+  // Registration is a stored setting now, not an environment variable.
+  r = await call("PUT", "/api/admin/settings", { allowRegistration: false });
+  check("admin closes registration", r.status === 200 && r.json.allowRegistration === false);
+
+  const keepAdmin = new Map(cookies);
+  cookies = new Map();
+  r = await call("POST", "/api/auth/register", { email: `blocked-${Date.now()}@example.com`, password, name: "Blocked" });
+  check("registration is refused while closed", r.status === 403, `status ${r.status}`);
+  cookies = keepAdmin;
+
+  r = await call("PUT", "/api/admin/settings", { allowRegistration: true });
+  check("admin reopens registration", r.status === 200 && r.json.allowRegistration === true);
+
+  r = await call("DELETE", `/api/admin/users/${r.json.id ?? "self"}`);
+  check("admin cannot delete itself by a bogus id", r.status === 404 || r.status === 400, `status ${r.status}`);
+}
+
+// 19. owner deletes
 cookies = ownerCookies;
 r = await call("DELETE", `/api/projects/${projectId}`);
 check("owner deletes project", r.status === 200);

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * PDF rendering.
  *
  * The timeline is *drawn* as vector shapes and real text, not captured as an
@@ -14,7 +14,9 @@ import type { jsPDF as JsPdfType } from "jspdf";
 import type { ThemeName, TimelineDoc } from "@shared";
 import { formatDate, today } from "@/lib/dates";
 import { buildAxis, layout as computeLayout, xOf } from "@/features/timeline/geometry";
-import { resolveCardHex, resolveCardInkHex, resolveToken } from "@/features/timeline/colors";
+import {
+  LANE_TINT_STRENGTH, resolveCardHex, resolveCardInkHex, resolveToken,
+} from "@/features/timeline/colors";
 import {
   AXIS_HEIGHT, LANE_LABEL_WIDTH, MARGIN, PRINT_LAYOUT, PRINT_TICK_SCALE, pageBox, planPages,
   type ExportOptions,
@@ -84,6 +86,14 @@ function flatten(color: string, background: Rgba, fallback: string): string {
 }
 
 const WHITE: Rgba = { r: 255, g: 255, b: 255, a: 1 };
+
+/** Blends two opaque colours, `amount` being how much of `a` shows through. */
+function mix(a: string, b: Rgba, amount: number): string {
+  const parsed = parseColor(a);
+  if (!parsed) return `#${toHex(b.r)}${toHex(b.g)}${toHex(b.b)}`;
+  const channel = (key: "r" | "g" | "b"): number => parsed[key] * amount + b[key] * (1 - amount);
+  return `#${toHex(channel("r"))}${toHex(channel("g"))}${toHex(channel("b"))}`;
+}
 
 /**
  * Reads theme colours without disturbing the page the user is looking at: a
@@ -180,6 +190,26 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
           pdf.rect(0, 0, box.width, box.height, "F");
         }
 
+        /*
+         * Lane washes go down before anything else, so the gridlines and cards
+         * sit on top of them rather than being painted over.
+         */
+        for (const lane of built.lanes) {
+          if (lane.color === undefined) continue;
+          const top = lane.y - rowSlice.startY;
+          if (top + lane.height <= 0 || top >= sliceHeight) continue;
+
+          const clippedTop = Math.max(0, top);
+          pdf.setFillColor(mix(palette.cardHex(lane.color), pageBackground, LANE_TINT_STRENGTH));
+          pdf.rect(
+            MARGIN,
+            plotTop + clippedTop,
+            box.width - MARGIN * 2,
+            Math.min(lane.height, sliceHeight - clippedTop),
+            "F",
+          );
+        }
+
         /* ------------------------------------------------------- heading -- */
         pdf.setTextColor(ink);
         pdf.setFontSize(11);
@@ -203,7 +233,7 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
           );
           if (left > 0) {
             pdf.setDrawColor(gridMajor);
-            pdf.setLineWidth(0.25);
+            pdf.setLineWidth(0.35);
             pdf.line(plotLeft + left, MARGIN + 1, plotLeft + left, plotTop + sliceHeight);
           }
         }
@@ -225,14 +255,25 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
           }
           if (left > 0) {
             pdf.setDrawColor(gridMinor);
-            pdf.setLineWidth(0.1);
+            pdf.setLineWidth(0.18);
             pdf.line(plotLeft + left, plotTop, plotLeft + left, plotTop + sliceHeight);
           }
         }
 
         pdf.setDrawColor(gridMajor);
-        pdf.setLineWidth(0.3);
+        pdf.setLineWidth(0.4);
         pdf.line(MARGIN, plotTop, box.width - MARGIN, plotTop);
+
+        /*
+         * The rule between the lane names and the plot. Without it the two run
+         * together and the page reads as one undifferentiated block - the names
+         * stop looking like a column and start looking like stray labels.
+         */
+        if (options.repeatLaneLabels) {
+          pdf.setDrawColor(gridMajor);
+          pdf.setLineWidth(0.5);
+          pdf.line(plotLeft - 2, MARGIN, plotLeft - 2, plotTop + sliceHeight);
+        }
 
         /* ------------------------------------------------ group headings -- */
         for (const group of built.groups) {
@@ -256,7 +297,7 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
           const separatorY = plotTop + top + lane.height;
           if (separatorY <= plotTop + sliceHeight + 0.01) {
             pdf.setDrawColor(gridMinor);
-            pdf.setLineWidth(0.1);
+            pdf.setLineWidth(0.15);
             pdf.line(MARGIN, separatorY, box.width - MARGIN, separatorY);
           }
 

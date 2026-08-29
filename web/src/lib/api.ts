@@ -34,7 +34,7 @@ function readCookie(name: string): string | undefined {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   /** Lets a request survive a page unload, used by the final sync flush. */
   keepalive?: boolean;
@@ -94,6 +94,16 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string;
+  role: "admin" | "user";
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "user";
+  createdAt: number;
+  projectCount: number;
 }
 
 export const api = {
@@ -115,6 +125,41 @@ export const api = {
     request<{ ok: true }>("/api/auth/password", {
       method: "POST",
       body: { currentPassword, password },
+    }),
+
+  updateProfile: (name: string) =>
+    request<{ user: SessionUser }>("/api/auth/profile", { method: "PATCH", body: { name } }),
+
+  /* -------------------------------------------------------------- admin -- */
+
+  adminSettings: () => request<{ allowRegistration: boolean }>("/api/admin/settings"),
+
+  setAdminSettings: (allowRegistration: boolean) =>
+    request<{ allowRegistration: boolean }>("/api/admin/settings", {
+      method: "PUT",
+      body: { allowRegistration },
+    }),
+
+  adminUsers: () => request<{ users: AdminUser[] }>("/api/admin/users"),
+
+  adminCreateUser: (input: { name: string; email: string; password: string; role: "admin" | "user" }) =>
+    request<{ user: AdminUser }>("/api/admin/users", { method: "POST", body: input }),
+
+  adminResetPassword: (id: string, password: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}/password`, { method: "POST", body: { password } }),
+
+  adminSetRole: (id: string, role: "admin" | "user") =>
+    request<{ ok: true }>(`/api/admin/users/${id}`, { method: "PATCH", body: { role } }),
+
+  adminDeleteUser: (id: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}`, { method: "DELETE" }),
+
+  /* ------------------------------------------------------------- import -- */
+
+  importProject: (title: string, doc: TimelineDoc) =>
+    request<{ project: ProjectSummary }>("/api/projects/import", {
+      method: "POST",
+      body: { title, doc },
     }),
 
   listProjects: () => request<{ projects: ProjectSummary[] }>("/api/projects"),

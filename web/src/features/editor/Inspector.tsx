@@ -381,6 +381,54 @@ function RowInspector({
         </p>
       </PanelSection>
 
+      <PanelSection title="Lane colour">
+        <div className="grid grid-cols-10 gap-1.5">
+          {/* Clearing the colour is a swatch of its own rather than a separate
+              button - it belongs in the same row of choices. */}
+          <Tooltip content="No colour">
+            <button
+              type="button"
+              disabled={readOnly}
+              aria-label="No colour"
+              aria-pressed={row.color === undefined}
+              onClick={() => commands.setRowColor(rowId, undefined)}
+              className={cn(
+                "flex size-6 items-center justify-center rounded-sm border border-line",
+                "transition-transform duration-[var(--dur-instant)] ease-standard",
+                "hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50",
+                row.color === undefined &&
+                  "ring-2 ring-accent ring-offset-2 ring-offset-[var(--surface)]",
+              )}
+            >
+              <XIcon className="size-3 text-ink-subtle" />
+            </button>
+          </Tooltip>
+
+          {CARD_SLOTS.map((slot) => (
+            <Tooltip key={slot} content={SLOT_NAMES[slot]}>
+              <button
+                type="button"
+                disabled={readOnly}
+                aria-label={SLOT_NAMES[slot]}
+                aria-pressed={row.color === slot}
+                onClick={() => commands.setRowColor(rowId, slot)}
+                className={cn(
+                  "size-6 rounded-sm transition-transform duration-[var(--dur-instant)] ease-standard",
+                  "hover:scale-110 disabled:cursor-not-allowed disabled:opacity-50",
+                  row.color === slot &&
+                    "ring-2 ring-accent ring-offset-2 ring-offset-[var(--surface)]",
+                )}
+                style={{ backgroundColor: cardFill(slot) }}
+              />
+            </Tooltip>
+          ))}
+        </div>
+        <p className="text-caption text-ink-subtle">
+          Washes the whole lane. Kept faint on purpose, so cards still read as
+          the foreground.
+        </p>
+      </PanelSection>
+
       {!readOnly ? (
         <PanelSection title="Actions">
           <Button

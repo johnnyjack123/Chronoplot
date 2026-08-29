@@ -10,6 +10,7 @@ import type { Item, TimelineDoc } from "../../shared/src/index.ts";
 import {
   layout as computeLayout, DEFAULT_LAYOUT, collectSnapTargets, snapOffsetDays,
 } from "../src/features/timeline/geometry.ts";
+import { roundedPath } from "../src/features/timeline/Links.tsx";
 
 let failed = 0;
 function check(label: string, ok: boolean, detail = ""): void {
@@ -124,17 +125,38 @@ const place = (doc: TimelineDoc, unitsPerDay = 3) =>
   check("the dragged card is excluded", !targets.includes("2026-06-01"));
 
   // Three days short of card A's trailing edge, at 3px/day, is 9px away.
-  const nudge = snapOffsetDays(["2026-03-29"], targets, 3, 9);
-  check("a near edge snaps", nudge === 3, String(nudge));
+  const near = snapOffsetDays(["2026-03-29"], targets, 3, 9);
+  check("a near edge snaps", near.days === 3, String(near.days));
+  check("the snap reports what it caught on", near.target === "2026-04-01", String(near.target));
 
   // Far away, nothing should move.
-  check("a distant edge does not snap", snapOffsetDays(["2026-05-01"], targets, 3, 9) === 0);
+  const far = snapOffsetDays(["2026-05-01"], targets, 3, 9);
+  check("a distant edge does not snap", far.days === 0 && far.target === null);
 
   // The same day distance is out of range once zoomed in.
-  check(
-    "snapping is measured in pixels, not days",
-    snapOffsetDays(["2026-03-29"], targets, 30, 9) === 0,
-  );
+  const zoomed = snapOffsetDays(["2026-03-29"], targets, 30, 9);
+  check("snapping is measured in pixels, not days", zoomed.days === 0 && zoomed.target === null);
+}
+
+/* 8. Rounded link routing. The path must still pass through the same corners -
+ *    rounding is a finish, not a different route. */
+{
+  const square = roundedPath([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }], 0);
+  check("a zero radius stays a polyline", !square.includes("Q"), square);
+
+  const curved = roundedPath([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }], 8);
+  check("corners become curves", curved.includes("Q"), curved);
+  check("the route still starts where it should", curved.startsWith("M 0 0"), curved.slice(0, 12));
+  check("the route still ends where it should", curved.trimEnd().endsWith("100 50"), curved.slice(-14));
+
+  // A corner between two short segments must not round further than half of
+  // either, or the curve overshoots and doubles back.
+  const tight = roundedPath([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 4 }], 20);
+  const numbers = tight.match(/-?\d+(\.\d+)?/g)!.map(Number);
+  check("a tight corner does not overshoot", numbers.every((n) => n >= -0.01 && n <= 4.01), tight);
+
+  check("a single point is harmless", roundedPath([{ x: 3, y: 4 }]) === "M 3 4");
+  check("an empty route is harmless", roundedPath([]) === "");
 }
 
 console.log(failed === 0 ? "\nAll packing checks passed" : `\n${failed} check(s) failed`);

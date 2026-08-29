@@ -53,6 +53,20 @@ export function resolveCardInkHex(slot: number, root: HTMLElement = document.doc
   return value || "#ffffff";
 }
 
+/**
+ * A lane's background wash.
+ *
+ * Deliberately faint. The lane tint and the cards on it use the same eight
+ * slots, so if the wash were anywhere near as saturated as a card the two would
+ * compete and the cards would stop reading as the foreground.
+ */
+export const LANE_TINT_STRENGTH = 0.14;
+
+export function laneTint(slot: number | undefined): string | undefined {
+  if (slot === undefined) return undefined;
+  return `color-mix(in oklab, ${cardFill(slot)} ${LANE_TINT_STRENGTH * 100}%, transparent)`;
+}
+
 /** Any theme token, resolved to a concrete value for export. */
 export function resolveToken(name: string, root: HTMLElement = document.documentElement): string {
   return getComputedStyle(root).getPropertyValue(name).trim();

@@ -63,6 +63,56 @@ re-laying it out, which is why text scales like a map instead of staying a fixed
 size; the hover detail is where the precision lives. Every piece of user text is
 escaped on the way out.
 
+### Embedding the HTML export in Obsidian
+
+The export is one file with everything inside it, so Obsidian needs no plugin.
+Put the file in your vault — a folder like `attachments/` is fine — and embed it
+in a note with an `<iframe>`:
+
+```html
+<iframe src="attachments/roadmap.html" width="100%" height="520"
+        style="border:0;border-radius:10px"></iframe>
+```
+
+The path is relative to the vault root. Obsidian renders raw HTML in reading
+view, so switch out of source mode to see it; drag to pan, scroll to zoom, hover
+a card for its exact dates. Re-exporting over the same filename updates every
+note that embeds it.
+
+On a website it is the same tag, or just serve the file directly — it has no
+dependencies and sets no cookies.
+
+### Accounts and administration
+
+The **first account to register becomes the administrator**, and that account
+always gets in even with registration closed — otherwise an instance started
+with `ALLOW_REGISTRATION=false` could never create one.
+
+Administrators get a shield icon on the dashboard: create and delete accounts,
+reset passwords, grant or remove admin rights, and open or close registration.
+That switch is stored in the database, so it survives a restart;
+`ALLOW_REGISTRATION` only sets the value a fresh instance starts with. The
+server refuses to remove or demote the last remaining administrator.
+
+Everyone can change their own display name and password from the account button.
+Changing a password — or having one reset — signs that account out everywhere.
+
+If an existing instance ends up with the wrong administrator (the migration
+promotes the earliest account, which is a guess):
+
+```bash
+node scripts/make-admin.mjs                    # list accounts and their roles
+node scripts/make-admin.mjs you@example.com    # promote that one
+node scripts/make-admin.mjs you@example.com --only   # and demote the rest
+```
+
+### Moving a project between instances
+
+Export writes a `.chronoplot.json` file — the timeline document and nothing
+else, no accounts and no sharing. Import it on the other instance from the
+dashboard. The file is validated before it is sent, so a truncated or foreign
+file is refused with a readable message rather than a 422.
+
 ### Docker
 
 ```bash
@@ -87,6 +137,15 @@ Writes a timestamped, self-contained copy into `backups/` and verifies it by
 reopening it and comparing row counts. Use this rather than copying the `.sqlite`
 file: WAL journalling keeps recent commits in a separate `-wal` file, so a plain
 copy can be almost empty. Safe to run while the server is up.
+
+Schema migrations run on boot, which is convenient and also the reason to
+rehearse one before it meets real data:
+
+```bash
+node scripts/check-migration.mjs copy      # copy the live database
+DATABASE_URL=backups/migration-rehearsal.sqlite PORT=5189 npm start
+node scripts/check-migration.mjs verify    # nothing lost, columns added
+```
 
 ### Switching to Postgres
 
@@ -140,7 +199,9 @@ things under test.)
 
 The smoke test drives the real API over HTTP: registration, login, CSRF
 rejection, cross-origin rejection, sharing, read-only enforcement, version
-conflicts and document integrity.
+conflicts, document integrity, project import, and the admin surface —
+including that a non-admin is refused it and that a password reset actually
+invalidates the old password.
 
 ---
 

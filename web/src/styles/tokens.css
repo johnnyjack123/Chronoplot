@@ -122,11 +122,17 @@
   --dur-slow: 380ms;
 
   /* ------------------------------------------------------------ z-layers -- */
+  /*
+   * Popovers sit ABOVE dialogs. A select or date picker opened from inside a
+   * dialog is a child of it in every sense except the stacking context, and
+   * ranking dialogs higher put those menus behind the dialog they belong to -
+   * they opened, took focus, and were invisible.
+   */
   --z-plot: 1;
   --z-sticky: 10;
   --z-drag: 40;
-  --z-popover: 50;
-  --z-dialog: 60;
+  --z-dialog: 50;
+  --z-popover: 60;
   --z-toast: 70;
 }
 

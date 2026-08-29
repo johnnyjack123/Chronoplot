@@ -59,6 +59,11 @@ export const rowSchema = z.object({
   /** null means the row sits at the top level, outside any group. */
   groupId: idSchema.nullable(),
   title: z.string().max(200),
+  /**
+   * Optional palette slot tinting the whole lane. Optional rather than
+   * defaulted so documents written before lanes could be coloured stay valid.
+   */
+  color: z.number().int().min(0).max(8).optional(),
 });
 export type Row = z.infer<typeof rowSchema>;
 

@@ -72,6 +72,17 @@ export const DownloadIcon = (p: IconProps) => (
   <Icon {...p}><path d="M8 2.75v7.5" /><path d="m5 7.5 3 3 3-3" /><path d="M3 12.25h10" /></Icon>
 );
 
+export const UploadIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M8 10.25v-7.5" /><path d="m5 5.75 3-3 3 3" /><path d="M3 12.25h10" /></Icon>
+);
+
+export const ShieldIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 1.9 13.25 4v3.6c0 3-2.1 5.4-5.25 6.5C4.85 13 2.75 10.6 2.75 7.6V4L8 1.9Z" />
+    <path d="m5.9 7.9 1.5 1.5 2.9-3" />
+  </Icon>
+);
+
 export const ShareIcon = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="12" cy="4" r="1.75" /><circle cx="4" cy="8" r="1.75" /><circle cx="12" cy="12" r="1.75" />
@@ -168,11 +179,16 @@ export const AlertIcon = (p: IconProps) => (
   </Icon>
 );
 
+/*
+ * A horseshoe, opening downward, with the band across both poles. The previous
+ * attempt was an outline with two crossbars and read as a gate rather than a
+ * magnet - the recognisable part is the closed U with thick arms.
+ */
 export const MagnetIcon = (p: IconProps) => (
   <Icon {...p}>
-    <path d="M3.25 3v4.75a4.75 4.75 0 0 0 9.5 0V3" />
-    <path d="M3.25 7.25h3.5M9.25 7.25h3.5" />
-    <path d="M3.25 3h3.5M9.25 3h3.5" />
+    <path d="M2.75 13.25V7.5a5.25 5.25 0 0 1 10.5 0v5.75" />
+    <path d="M6.25 13.25V7.5a1.75 1.75 0 0 1 3.5 0v5.75" />
+    <path d="M2.75 10.75h3.5M9.75 10.75h3.5" />
   </Icon>
 );
 

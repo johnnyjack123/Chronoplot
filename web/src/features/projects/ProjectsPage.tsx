@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ProjectSummary } from "@shared";
 import { ApiError, api } from "@/lib/api";
@@ -10,8 +10,12 @@ import { Field, Input } from "@/components/ui/Field";
 import { Tooltip } from "@/components/ui/Popover";
 import { ThemeSwitcher } from "@/features/theme/ThemeSwitcher";
 import {
-  BarIcon, ChronoplotMark, LogOutIcon, PlusIcon, ShareIcon, TrashIcon,
+  BarIcon, ChronoplotMark, DownloadIcon, LogOutIcon, PlusIcon, ShareIcon, ShieldIcon,
+  TrashIcon, UploadIcon,
 } from "@/components/icons";
+import { AccountDialog } from "@/features/account/AccountDialog";
+import { AdminDialog } from "@/features/admin/AdminDialog";
+import { downloadProjectFile, parseProjectFile } from "./project-file";
 
 const relativeTime = (timestamp: number): string => {
   const seconds = Math.round((Date.now() - timestamp) / 1000);
@@ -37,6 +41,9 @@ export function ProjectsPage() {
   const [newTitle, setNewTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -69,6 +76,37 @@ export function ProjectsPage() {
     }
   };
 
+  const importFile = async (file: File): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      const parsed = parseProjectFile(await file.text());
+      const { project } = await api.importProject(parsed.title, parsed.doc);
+      navigate(`/p/${project.id}`);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError
+          ? caught.message
+          : caught instanceof Error
+            ? caught.message
+            : "Could not import that file.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportProject = async (project: ProjectSummary): Promise<void> => {
+    setError(null);
+    try {
+      // The list only carries a summary, so fetch the document itself.
+      const { project: full } = await api.getProject(project.id);
+      downloadProjectFile(full.title, full.doc, user?.name);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Could not export that project.");
+    }
+  };
+
   const confirmDelete = async (): Promise<void> => {
     if (!pendingDelete) return;
     setBusy(true);
@@ -94,7 +132,28 @@ export function ProjectsPage() {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="mr-1 hidden text-caption text-ink-subtle sm:block">{user?.name}</span>
+          {user?.role === "admin" ? (
+            <Tooltip content="Administration">
+              <IconButton label="Administration" onClick={() => setAdminOpen(true)}>
+                <ShieldIcon />
+              </IconButton>
+            </Tooltip>
+          ) : null}
+          <Tooltip content="Your account">
+            <button
+              type="button"
+              onClick={() => setAccountOpen(true)}
+              className={cn(
+                "flex items-center gap-2 rounded-sm px-2 py-1 text-caption text-ink-muted",
+                "transition-colors duration-[var(--dur-instant)] hover:bg-accent-soft hover:text-ink",
+              )}
+            >
+              <span className="flex size-6 items-center justify-center rounded-full bg-accent-soft text-micro text-accent">
+                {(user?.name ?? "?").slice(0, 1).toUpperCase()}
+              </span>
+              <span className="hidden sm:block">{user?.name}</span>
+            </button>
+          </Tooltip>
           <ThemeSwitcher />
           <Tooltip content="Sign out">
             <IconButton label="Sign out" onClick={() => void signOut()}>
@@ -116,9 +175,30 @@ export function ProjectsPage() {
                   : `${projects.length} timeline${projects.length === 1 ? "" : "s"}.`}
             </p>
           </div>
-          <Button variant="primary" size="lg" icon={<PlusIcon />} onClick={() => setCreating(true)}>
-            New timeline
-          </Button>
+          <div className="flex items-center gap-2">
+            {/*
+              A project file is a plain document, so importing is a file picker
+              rather than a server-to-server transfer - the two instances never
+              need to reach each other.
+            */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void importFile(file);
+              }}
+            />
+            <Button size="lg" icon={<UploadIcon />} onClick={() => fileInputRef.current?.click()}>
+              Import
+            </Button>
+            <Button variant="primary" size="lg" icon={<PlusIcon />} onClick={() => setCreating(true)}>
+              New timeline
+            </Button>
+          </div>
         </div>
 
         {error ? (
@@ -180,20 +260,33 @@ export function ProjectsPage() {
                       )}
                     </span>
 
-                    {project.role === "owner" ? (
-                      <IconButton
-                        label={`Delete ${project.title}`}
-                        size="sm"
-                        // Sits above the card-wide click target.
-                        className="relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setPendingDelete(project);
-                        }}
-                      >
-                        <TrashIcon />
-                      </IconButton>
-                    ) : null}
+                    {/* These sit above the card-wide click target. */}
+                    <span className="relative z-10 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                      <Tooltip content="Export as a project file">
+                        <IconButton
+                          label={`Export ${project.title}`}
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void exportProject(project);
+                          }}
+                        >
+                          <DownloadIcon />
+                        </IconButton>
+                      </Tooltip>
+                      {project.role === "owner" ? (
+                        <IconButton
+                          label={`Delete ${project.title}`}
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPendingDelete(project);
+                          }}
+                        >
+                          <TrashIcon />
+                        </IconButton>
+                      ) : null}
+                    </span>
                   </div>
                 </div>
               </li>
@@ -250,6 +343,11 @@ export function ProjectsPage() {
           Anyone you shared it with will lose access as well.
         </p>
       </Dialog>
+
+      <AccountDialog open={accountOpen} onOpenChange={setAccountOpen} />
+      {user?.role === "admin" ? (
+        <AdminDialog open={adminOpen} onOpenChange={setAdminOpen} />
+      ) : null}
     </div>
   );
 }

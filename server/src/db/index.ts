@@ -15,7 +15,7 @@ export async function getDb(): Promise<Db> {
     instance = await createSqliteDb(file);
   }
 
-  await migrate(instance);
+  await migrate(instance, config.allowRegistration);
   return instance;
 }
 

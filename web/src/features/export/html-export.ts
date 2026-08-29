@@ -22,7 +22,9 @@ import {
   buildAxis, layout as computeLayout, xOf, findPlacedItem, type Layout, type PlacedItem,
 } from "@/features/timeline/geometry";
 import { linkPath } from "@/features/timeline/Links";
-import { resolveCardHex, resolveCardInkHex, resolveToken } from "@/features/timeline/colors";
+import {
+  LANE_TINT_STRENGTH, resolveCardHex, resolveCardInkHex, resolveToken,
+} from "@/features/timeline/colors";
 
 export interface HtmlExportOptions {
   title: string;
@@ -186,6 +188,15 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
       .join("");
 
     /* ------------------------------------------------------------ lanes -- */
+    // Lane washes go first so gridlines and cards land on top of them.
+    const laneWashes = layout.lanes
+      .filter((lane) => lane.color !== undefined)
+      .map(
+        (lane) =>
+          `<rect x="${-labelWidth}" y="${lane.y}" width="${labelWidth + plotWidth}" height="${lane.height}" fill="${palette.card(lane.color!)}" opacity="${LANE_TINT_STRENGTH}"/>`,
+      )
+      .join("");
+
     const laneRows = layout.lanes
       .map(
         (lane) =>
@@ -195,6 +206,14 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
             : ""),
       )
       .join("");
+
+    /*
+     * The rule between the lane names and the plot. Without it the names read
+     * as stray text floating beside the bars rather than as a column.
+     */
+    const laneDivider = options.showLaneLabels
+      ? `<line x1="0" y1="0" x2="0" y2="${AXIS_HEIGHT + plotHeight}" stroke="${gridMajor}" stroke-width="1.5"/>`
+      : "";
 
     const groupRows = layout.groups
       .map(
@@ -290,9 +309,10 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
         </marker>
       </defs>
       <g transform="translate(${PADDING + labelWidth} ${PADDING})">
-        <g transform="translate(0 ${AXIS_HEIGHT})">${weekends}${groupRows}${laneRows}</g>
+        <g transform="translate(0 ${AXIS_HEIGHT})">${laneWashes}${weekends}${groupRows}${laneRows}</g>
         ${upperTicks}${lowerTicks}
-        <line x1="${-labelWidth}" y1="${AXIS_HEIGHT}" x2="${plotWidth}" y2="${AXIS_HEIGHT}" stroke="${gridMajor}"/>
+        <line x1="${-labelWidth}" y1="${AXIS_HEIGHT}" x2="${plotWidth}" y2="${AXIS_HEIGHT}" stroke="${gridMajor}" stroke-width="1.5"/>
+        ${laneDivider}
         <g transform="translate(0 ${AXIS_HEIGHT})">${links}${renderCards(layout, palette)}</g>
         ${todayLine}
       </g>

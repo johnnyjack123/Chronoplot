@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { config } from "../config.js";
 import { getDb } from "../db/index.js";
-import type { UserRow } from "../db/schema.js";
+import { isRegistrationOpen, type UserRow } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { dummyVerify, hashPassword, verifyPassword } from "../auth/password.js";
 import { clearAuthCookies, requireUser, setAuthCookies } from "../auth/plugin.js";
@@ -44,17 +45,28 @@ const normaliseEmail = (email: string) => email.trim().toLowerCase();
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/auth/me", async (request) => {
-    return { user: request.user ?? null, allowRegistration: config.allowRegistration };
+    const db = await getDb();
+    return {
+      user: request.user ?? null,
+      allowRegistration: await isRegistrationOpen(db, config.allowRegistration),
+    };
   });
 
   app.post("/api/auth/register", async (request, reply) => {
-    if (!config.allowRegistration) {
+    const db = await getDb();
+
+    /*
+     * The very first account always gets in, even with registration closed -
+     * otherwise a server started with ALLOW_REGISTRATION=false has no way to
+     * ever create its administrator.
+     */
+    const anyUser = await db.get<{ id: string }>(`SELECT id FROM users LIMIT 1`);
+    if (anyUser && !(await isRegistrationOpen(db, config.allowRegistration))) {
       throw new HttpError(403, "registration_closed", "Registration is closed on this server.");
     }
 
     const body = registerSchema.parse(request.body);
     const email = normaliseEmail(body.email);
-    const db = await getDb();
 
     const existing = await db.get<UserRow>(`SELECT id FROM users WHERE email = ?`, [email]);
     if (existing) {
@@ -64,14 +76,26 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
+    const role = anyUser ? "user" : "admin";
     await db.run(
-      `INSERT INTO users (id, email, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)`,
-      [id, email, body.name.trim(), await hashPassword(body.password), Date.now()],
+      `INSERT INTO users (id, email, name, password_hash, role, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, email, body.name.trim(), await hashPassword(body.password), role, Date.now()],
     );
 
     const token = await createSession(db, id);
     setAuthCookies(reply, token);
-    return { user: { id, email, name: body.name.trim() } };
+    return { user: { id, email, name: body.name.trim(), role } };
+  });
+
+  /** Changes the caller's own display name. */
+  app.patch("/api/auth/profile", async (request) => {
+    const user = requireUser(request);
+    const body = z.object({ name: z.string().min(1).max(120) }).parse(request.body);
+
+    const db = await getDb();
+    await db.run(`UPDATE users SET name = ? WHERE id = ?`, [body.name.trim(), user.id]);
+    return { user: { ...user, name: body.name.trim() } };
   });
 
   app.post("/api/auth/login", async (request, reply) => {
@@ -81,7 +105,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
     const db = await getDb();
     const user = await db.get<UserRow>(
-      `SELECT id, email, name, password_hash FROM users WHERE email = ?`,
+      `SELECT id, email, name, password_hash, role FROM users WHERE email = ?`,
       [email],
     );
 
@@ -100,7 +124,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     attempts.delete(email);
     const token = await createSession(db, user.id);
     setAuthCookies(reply, token);
-    return { user: { id: user.id, email: user.email, name: user.name } };
+    return {
+      user: { id: user.id, email: user.email, name: user.name, role: user.role ?? "user" },
+    };
   });
 
   app.post("/api/auth/logout", async (request, reply) => {

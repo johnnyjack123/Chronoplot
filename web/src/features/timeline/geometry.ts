@@ -379,6 +379,8 @@ export interface PlacedLane {
   rowId: string;
   title: string;
   groupId: string | null;
+  /** Palette slot tinting the lane, if one was chosen. */
+  color: number | undefined;
   y: number;
   height: number;
   items: PlacedItem[];
@@ -527,7 +529,12 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
 
   const plotWidth = totalWidth(doc, unitsPerDay);
 
-  const emitLane = (row: { id: string; title: string; groupId: string | null }): void => {
+  const emitLane = (row: {
+    id: string;
+    title: string;
+    groupId: string | null;
+    color?: number;
+  }): void => {
     const items = itemsByRow.get(row.id) ?? [];
     const packed = packLane(items, options, timelineStart, plotWidth);
     const stackCount = Math.max(1, ...[...packed.values()].map((entry) => entry.stack + 1));
@@ -537,6 +544,7 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
       rowId: row.id,
       title: row.title,
       groupId: row.groupId,
+      color: row.color,
       y,
       height,
       items: items.map((item) => {
@@ -655,20 +663,28 @@ export function collectSnapTargets(doc: TimelineDoc, excludeItemId?: string): Is
   return [...targets];
 }
 
+export interface SnapResult {
+  /** Shift in whole days, or 0 when nothing was close enough. */
+  days: number;
+  /** The date that was latched onto, so the editor can show where it snapped. */
+  target: IsoDate | null;
+}
+
 /**
  * How far to nudge a dragged item so one of its edges lands on a target.
  *
- * Returns a shift in whole days, or 0 when nothing is close enough. The
- * threshold is in screen units, so snapping feels the same at every zoom rather
- * than covering months when zoomed out.
+ * The threshold is in screen units, so snapping feels the same at every zoom
+ * rather than covering months when zoomed out. The matched target comes back
+ * with it: a snap that moves an edge without saying what it caught on looks
+ * like the editor guessing.
  */
 export function snapOffsetDays(
   edges: IsoDate[],
   targets: IsoDate[],
   unitsPerDay: number,
   thresholdPx = 9,
-): number {
-  let best = 0;
+): SnapResult {
+  let best: SnapResult = { days: 0, target: null };
   let bestDistance = Infinity;
 
   for (const edge of edges) {
@@ -677,7 +693,7 @@ export function snapOffsetDays(
       const distance = Math.abs(days * unitsPerDay);
       if (distance <= thresholdPx && distance < bestDistance) {
         bestDistance = distance;
-        best = days;
+        best = { days, target };
       }
     }
   }

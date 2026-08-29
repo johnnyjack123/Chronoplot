@@ -45,6 +45,7 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string;
+  role: "admin" | "user";
 }
 
 export async function resolveSession(
@@ -55,7 +56,8 @@ export async function resolveSession(
 
   const id = digestToken(token);
   const row = await db.get<SessionRow & UserRow>(
-    `SELECT s.id AS id, s.expires_at AS expires_at, u.id AS user_id, u.email AS email, u.name AS name
+    `SELECT s.id AS id, s.expires_at AS expires_at,
+            u.id AS user_id, u.email AS email, u.name AS name, u.role AS role
        FROM sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.id = ?`,
@@ -76,8 +78,13 @@ export async function resolveSession(
     await db.run(`UPDATE sessions SET expires_at = ? WHERE id = ?`, [nextExpiry, id]);
   }
 
-  const user = row as unknown as { user_id: string; email: string; name: string };
-  return { id: user.user_id, email: user.email, name: user.name };
+  const user = row as unknown as {
+    user_id: string;
+    email: string;
+    name: string;
+    role: "admin" | "user";
+  };
+  return { id: user.user_id, email: user.email, name: user.name, role: user.role ?? "user" };
 }
 
 export async function destroySession(db: Db, token: string | undefined): Promise<void> {

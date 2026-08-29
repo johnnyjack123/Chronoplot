@@ -10,6 +10,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Popover";
 import { ChevronDownIcon, ChevronRightIcon, GripIcon, GroupIcon, PlusIcon } from "@/components/icons";
 import { PlotBackground, TimeAxis } from "./Axis";
+import { laneTint } from "./colors";
 import { LinkLayer, PendingLink } from "./Links";
 import { TimelineCard, describeRange, type DragMode } from "./TimelineCard";
 import {
@@ -36,6 +37,8 @@ type DragState =
       originStart: string;
       originEnd: string;
       originRowId: string;
+      /** Date the drag latched onto, shown as a guide line while it holds. */
+      snappedTo: string | null;
     }
   | { kind: "link"; fromId: string; x: number; y: number; overItemId: string | null }
   | { kind: "create"; rowId: string; anchor: string; current: string };
@@ -163,6 +166,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
         originStart: placed.item.start,
         originEnd: placed.item.end,
         originRowId: placed.item.rowId,
+        snappedTo: null,
       });
     },
     [localPoint],
@@ -237,14 +241,15 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
         // Latch onto neighbouring edges once they are within a few pixels. The
         // threshold is in pixels rather than days so it feels identical whether
         // a day is forty pixels wide or a hundredth of one.
-        const nudge = snapping
+        const snap = snapping
           ? snapOffsetDays([moved.start, addDays(moved.end, 1)], snapTargets, unitsPerDay)
-          : 0;
+          : { days: 0, target: null };
         const snapped =
-          nudge === 0
+          snap.days === 0
             ? moved
-            : { start: addDays(moved.start, nudge), end: addDays(moved.end, nudge) };
+            : { start: addDays(moved.start, snap.days), end: addDays(moved.end, snap.days) };
 
+        if (drag.snappedTo !== snap.target) setDrag({ ...drag, snappedTo: snap.target });
         const bounded = clampToWindow(snapped.start, snapped.end, doc.settings.start, doc.settings.end);
 
         // Dragging vertically re-parents the card into whichever lane the
@@ -262,9 +267,11 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
       if (drag.kind === "resize-start") {
         const raw = addDays(drag.originStart, deltaDays);
-        const aligned = addDays(raw, snapOffsetDays([raw], snapTargets, unitsPerDay));
+        const snap = snapOffsetDays([raw], snapTargets, unitsPerDay);
+        if (drag.snappedTo !== snap.target) setDrag({ ...drag, snappedTo: snap.target });
+
         const next = clampDate(
-          snapToPrecision(aligned, item.precision, "start"),
+          snapToPrecision(addDays(raw, snap.days), item.precision, "start"),
           doc.settings.start,
           item.end,
         );
@@ -275,7 +282,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
       const raw = addDays(drag.originEnd, deltaDays);
       // The trailing edge sits a day before the target, so two cards butt up
       // against each other rather than overlapping by one day.
-      const aligned = addDays(raw, snapOffsetDays([addDays(raw, 1)], snapTargets, unitsPerDay));
+      const endSnap = snapOffsetDays([addDays(raw, 1)], snapTargets, unitsPerDay);
+      if (drag.snappedTo !== endSnap.target) setDrag({ ...drag, snappedTo: endSnap.target });
+      const aligned = addDays(raw, endSnap.days);
       const next = clampDate(
         snapToPrecision(aligned, item.precision, "end"),
         item.start,
@@ -446,6 +455,11 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
         })()
       : null;
 
+  const snapLineX =
+    drag !== null && drag.kind !== "link" && drag.kind !== "create" && drag.snappedTo !== null
+      ? xOf(drag.snappedTo, doc.settings.start, unitsPerDay)
+      : null;
+
   const linkSource =
     drag?.kind === "link"
       ? layout.lanes.flatMap((lane) => lane.items).find((placed) => placed.item.id === drag.fromId)
@@ -509,12 +523,25 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
               />
             ))}
             {layout.lanes.map((lane) => (
-              <div
-                key={`sep-${lane.rowId}`}
-                aria-hidden
-                className="pointer-events-none absolute left-0 h-px bg-line transition-[top] duration-[var(--dur-base)] ease-standard"
-                style={{ top: lane.y + lane.height, width: layout.totalWidth }}
-              />
+              <div key={`lane-${lane.rowId}`}>
+                {lane.color !== undefined ? (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute left-0 transition-[top,height] duration-[var(--dur-base)] ease-standard"
+                    style={{
+                      top: lane.y,
+                      height: lane.height,
+                      width: layout.totalWidth,
+                      background: laneTint(lane.color),
+                    }}
+                  />
+                ) : null}
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute left-0 h-px bg-line transition-[top] duration-[var(--dur-base)] ease-standard"
+                  style={{ top: lane.y + lane.height, width: layout.totalWidth }}
+                />
+              </div>
             ))}
 
             {doc.settings.showLinks ? (
@@ -563,6 +590,21 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
             {linkSource && drag?.kind === "link" ? (
               <PendingLink from={linkSource} x={drag.x} y={drag.y} />
+            ) : null}
+
+            {/*
+              Where the drag latched on. Without this the card simply jumps a
+              few days and the reason is invisible.
+            */}
+            {snapLineX !== null ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute top-0 z-[var(--z-drag)] w-0.5 -translate-x-1/2 bg-accent"
+                style={{ left: snapLineX, height: layout.totalHeight }}
+              >
+                <span className="absolute -left-1 -top-1 size-2.5 rounded-full bg-accent" />
+                <span className="absolute -left-1 -bottom-1 size-2.5 rounded-full bg-accent" />
+              </div>
             ) : null}
 
             {todayPos !== null ? <TodayMarker x={todayPos} height={layout.totalHeight} /> : null}
@@ -896,7 +938,9 @@ function LaneList({
               indented && "pl-5",
               drag?.kind === "row" && drag.id === lane.rowId && "opacity-40",
             )}
-            style={{ top: lane.y, height: lane.height }}
+            // The same wash as the lane itself, so the name and the row it
+            // labels are visibly one thing.
+            style={{ top: lane.y, height: lane.height, background: laneTint(lane.color) }}
           >
             {!readOnly ? (
               <span

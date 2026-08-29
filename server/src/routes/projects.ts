@@ -138,6 +138,37 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     return { project: await summaryOf(db, project!, "owner") };
   });
 
+  /* ------------------------------------------------------------ import -- */
+  /*
+   * One step rather than "create then save": importing through the ordinary
+   * create-and-update pair would leave an empty project behind whenever the
+   * second call failed.
+   */
+  app.post("/api/projects/import", async (request) => {
+    const user = requireUser(request);
+    const body = z
+      .object({ title: z.string().min(1).max(200), doc: timelineDocSchema })
+      .parse(request.body);
+
+    const problems = findDocumentInconsistencies(body.doc);
+    if (problems.length > 0) {
+      throw new HttpError(422, "inconsistent_document", "The imported timeline is inconsistent.", problems);
+    }
+
+    const db = await getDb();
+    const id = randomUUID();
+    const now = Date.now();
+
+    await db.run(
+      `INSERT INTO projects (id, owner_id, title, doc, version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, user.id, body.title.trim(), JSON.stringify(body.doc), 1, now, now],
+    );
+
+    const project = await db.get<ProjectRow>(`SELECT * FROM projects WHERE id = ?`, [id]);
+    return { project: await summaryOf(db, project!, "owner") };
+  });
+
   /* -------------------------------------------------------------- read -- */
   app.get("/api/projects/:id", async (request) => {
     const user = requireUser(request);
