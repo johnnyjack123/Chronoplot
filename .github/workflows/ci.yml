@@ -121,6 +121,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Only for the labels. `org.opencontainers.image.source` is what makes
+      # GitHub attach the package to this repository rather than leaving it
+      # floating under the account, so it has to be on the per-architecture
+      # images - the manifest list carries no labels of its own.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+
       # Published by digest, not by tag: two jobs pushing the same tag would
       # each overwrite the other's architecture. The manifest job below turns
       # the digests into one tag that carries both.
@@ -129,6 +138,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ steps.image.outputs.slug }}
           cache-to: type=gha,mode=max,scope=${{ steps.image.outputs.slug }}
