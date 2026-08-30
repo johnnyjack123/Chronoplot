@@ -87,6 +87,34 @@ Building under WSL works from either filesystem, though a clone on the Linux
 side is much faster than one reached through `/mnt/c`. `.gitattributes` keeps
 the Dockerfile on LF endings so a Windows checkout does not upset the parser.
 
+### `SQLITE_CANTOPEN` on startup
+
+The container runs as the unprivileged `node` user (uid 1000), and the database
+lives on a volume. If that volume ends up owned by root — created before the
+image set its ownership, or a bind mount pointing at a root-owned host directory
+— the process cannot write to it and SQLite reports `SQLITE_CANTOPEN`.
+
+The server now says so explicitly, naming the directory, its owner and the uid
+it is running as. To fix it, find the real volume name first: Compose prefixes
+it with the project, and naming one that does not exist silently creates a new
+empty volume instead of repairing yours.
+
+```bash
+docker volume ls | grep chronoplot
+docker compose down
+docker run --rm -v <the-name>:/data alpine chown -R 1000:1000 /data
+docker compose up -d
+```
+
+To inspect it without changing anything:
+
+```bash
+docker run --rm -v <the-name>:/data alpine ls -lan /data
+```
+
+`1000:1000` is the `node` user in the official Node images, which is what the
+Dockerfile switches to.
+
 ---
 
 ## Postgres instead of SQLite

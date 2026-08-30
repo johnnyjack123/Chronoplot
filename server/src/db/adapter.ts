@@ -34,13 +34,90 @@ export function toPositional(sql: string): string {
 
 /* -------------------------------------------------------------- SQLite -- */
 
+/**
+ * Turns a failure to open the database into something actionable.
+ *
+ * SQLite reports every one of these as `SQLITE_CANTOPEN`, which says nothing
+ * about which of several very different causes applied. In a container it is
+ * almost always the directory's ownership - the process runs as `node`, and a
+ * volume created before the image existed belongs to root - and that is not
+ * something anyone should have to deduce from an eight-line stack trace.
+ *
+ * Returns the error rather than throwing it, so the caller's `throw` keeps the
+ * control flow obvious to the compiler and the reader alike.
+ */
+async function describeOpenFailure(file: string, cause: unknown): Promise<Error> {
+  const { accessSync, existsSync, statSync, constants } = await import("node:fs");
+  const { dirname } = await import("node:path");
+
+  const directory = dirname(file);
+  const lines = [`Cannot open the SQLite database at ${file}.`, ""];
+
+  if (!existsSync(directory)) {
+    lines.push(`The directory ${directory} does not exist and could not be created.`);
+  } else {
+    let writable = true;
+    try {
+      accessSync(directory, constants.W_OK);
+    } catch {
+      writable = false;
+    }
+
+    lines.push(`Directory : ${directory}`);
+    if (process.getuid) {
+      const stats = statSync(directory);
+      lines.push(`Owned by  : uid ${stats.uid}, gid ${stats.gid}`);
+      lines.push(`Running as: uid ${process.getuid()}, gid ${process.getgid?.() ?? "?"}`);
+    }
+    lines.push(`Writable  : ${writable ? "yes" : "NO"}`);
+
+    if (!writable) {
+      lines.push(
+        "",
+        "The directory is not writable by this process. In Docker this usually",
+        "means the volume was created before the image set its ownership, or a",
+        "bind mount points at a host directory owned by someone else.",
+        "",
+        "Compose prefixes volume names with the project, so find the real name",
+        "first rather than guessing - naming a volume that does not exist just",
+        "creates a new empty one:",
+        "",
+        "  docker volume ls | grep chronoplot",
+        "  docker compose down",
+        "  docker run --rm -v <the-name>:/data alpine chown -R 1000:1000 /data",
+        "  docker compose up -d",
+      );
+    } else if (existsSync(file)) {
+      lines.push("", `The directory is writable, so check ${file} itself - it may be`);
+      lines.push("owned by another user, or not a database file at all.");
+    }
+  }
+
+  lines.push("", `Underlying error: ${cause instanceof Error ? cause.message : String(cause)}`);
+  return new Error(lines.join("\n"));
+}
+
 export async function createSqliteDb(file: string): Promise<Db> {
   const { default: Database } = await import("better-sqlite3");
   const { mkdirSync } = await import("node:fs");
   const { dirname } = await import("node:path");
 
-  mkdirSync(dirname(file), { recursive: true });
-  const sqlite = new Database(file);
+  // A no-op when the directory already exists, including when it exists and is
+  // unwritable - which is exactly the case the open below then fails on.
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+  } catch {
+    // Reported properly by explainOpenFailure once the open fails.
+  }
+
+  let sqlite: import("better-sqlite3").Database;
+  try {
+    sqlite = new Database(file);
+  } catch (cause) {
+    // Thrown here rather than inside the helper so the compiler can see that
+    // this branch never falls through to the assignment below.
+    throw await describeOpenFailure(file, cause);
+  }
 
   // WAL keeps readers from blocking the sync writes the editor sends.
   sqlite.pragma("journal_mode = WAL");
