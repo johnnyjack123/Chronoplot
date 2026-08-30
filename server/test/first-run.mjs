@@ -64,6 +64,9 @@ const check = (label, ok, detail = "") => {
 /* 1. The database must be empty, or this proves nothing. */
 let r = await call("GET", "/api/auth/me");
 check("the instance reports registration closed", r.json.allowRegistration === false, String(r.json.allowRegistration));
+// Drives the setup page. Without it the browser sends people to a sign-in form
+// that none of their credentials can satisfy, which reads as a broken deploy.
+check("the instance reports that it needs setting up", r.json.needsSetup === true, String(r.json.needsSetup));
 
 /* 2. The very first account gets in anyway, and administers the instance. */
 const owner = `owner-${Date.now()}@example.com`;
@@ -74,6 +77,9 @@ r = await call("POST", "/api/auth/register", {
 });
 check("the first account can register despite the lock", r.status === 200, `status ${r.status}`);
 check("the first account is an administrator", r.json.user?.role === "admin", String(r.json.user?.role));
+
+r = await call("GET", "/api/auth/me");
+check("setup is no longer needed afterwards", r.json.needsSetup === false, String(r.json.needsSetup));
 
 /* 3. Everyone after them is refused. */
 const stranger = new Map(cookies);

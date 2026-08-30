@@ -46,9 +46,17 @@ const normaliseEmail = (email: string) => email.trim().toLowerCase();
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/auth/me", async (request) => {
     const db = await getDb();
+    const anyUser = await db.get<{ id: string }>(`SELECT id FROM users LIMIT 1`);
+
     return {
       user: request.user ?? null,
       allowRegistration: await isRegistrationOpen(db, config.allowRegistration),
+      /*
+       * True while the instance has no accounts at all. The browser uses it to
+       * offer setting up the administrator instead of asking someone to sign in
+       * to an instance that nobody can sign in to yet.
+       */
+      needsSetup: anyUser === undefined,
     };
   });
 

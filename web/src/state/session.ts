@@ -4,6 +4,8 @@ import { api, ApiError, type SessionUser } from "@/lib/api";
 interface SessionState {
   user: SessionUser | null;
   allowRegistration: boolean;
+  /** True while the instance has no accounts at all. */
+  needsSetup: boolean;
   /** Undefined until the first /api/auth/me call resolves. */
   ready: boolean;
   refresh: () => Promise<void>;
@@ -14,12 +16,13 @@ interface SessionState {
 export const useSessionStore = create<SessionState>((set) => ({
   user: null,
   allowRegistration: true,
+  needsSetup: false,
   ready: false,
 
   refresh: async () => {
     try {
-      const { user, allowRegistration } = await api.session();
-      set({ user, allowRegistration, ready: true });
+      const { user, allowRegistration, needsSetup } = await api.session();
+      set({ user, allowRegistration, needsSetup, ready: true });
     } catch (error) {
       // A server that cannot be reached is not the same as being signed out,
       // but from the app's point of view both mean "show the sign-in screen".
@@ -36,5 +39,6 @@ export const useSessionStore = create<SessionState>((set) => ({
     }
   },
 
-  setUser: (user) => set({ user, ready: true }),
+  // Signing in or completing setup means the instance is no longer empty.
+  setUser: (user) => set({ user, needsSetup: false, ready: true }),
 }));

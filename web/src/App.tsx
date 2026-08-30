@@ -4,6 +4,7 @@ import { TooltipProvider } from "./components/ui/Popover";
 import { useSessionStore } from "./state/session";
 import { applyTheme, useThemeStore } from "./state/theme";
 import { AuthPage } from "./features/auth/AuthPage";
+import { SetupPage } from "./features/auth/SetupPage";
 import { ProjectsPage } from "./features/projects/ProjectsPage";
 import { EditorPage } from "./features/editor/EditorPage";
 import { ChronoplotMark } from "./components/icons";
@@ -21,10 +22,13 @@ function BootScreen() {
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, ready } = useSessionStore();
+  const { user, ready, needsSetup } = useSessionStore();
   const location = useLocation();
 
   if (!ready) return <BootScreen />;
+  // An empty instance has nowhere to sign in to, so send people to set it up
+  // rather than to a form none of their credentials can satisfy.
+  if (!user && needsSetup) return <Navigate to="/setup" replace />;
   if (!user) return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
   return <>{children}</>;
 }
@@ -47,6 +51,7 @@ export function App() {
     <BrowserRouter>
       <TooltipProvider>
         <Routes>
+          <Route path="/setup" element={<SetupPage />} />
           <Route path="/signin" element={<AuthPage />} />
           <Route
             path="/"

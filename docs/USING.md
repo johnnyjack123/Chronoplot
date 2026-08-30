@@ -6,9 +6,14 @@ Accounts, the editor, and getting timelines back out again.
 
 ## Accounts and administration
 
+A brand-new instance opens on a **setup page** rather than a sign-in form: there
+is nothing to sign in to yet, and asking for a password nobody has reads as a
+broken deployment. The page says what the account being created is for.
+
 The **first account to register becomes the administrator**, and that account
 always gets in even with registration closed — otherwise an instance started
-with `ALLOW_REGISTRATION=false` could never create one.
+with `ALLOW_REGISTRATION=false` could never create one. Once it exists, the
+setup page redirects to sign-in.
 
 Administrators get a shield icon on the dashboard: create and delete accounts,
 reset passwords, grant or remove admin rights, and open or close registration.

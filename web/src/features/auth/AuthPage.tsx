@@ -10,7 +10,7 @@ import { ThemeSwitcher } from "@/features/theme/ThemeSwitcher";
 type Mode = "signin" | "register";
 
 export function AuthPage() {
-  const { user, ready, allowRegistration, setUser } = useSessionStore();
+  const { user, ready, allowRegistration, needsSetup, setUser } = useSessionStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -25,6 +25,9 @@ export function AuthPage() {
     const from = (location.state as { from?: string } | null)?.from;
     return <Navigate to={from && from !== "/signin" ? from : "/"} replace />;
   }
+  // Reaching sign-in on an instance with no accounts, by a bookmark or a typed
+  // URL, should still land on the page that can actually do something.
+  if (ready && needsSetup) return <Navigate to="/setup" replace />;
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();

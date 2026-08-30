@@ -108,7 +108,9 @@ export interface AdminUser {
 
 export const api = {
   session: () =>
-    request<{ user: SessionUser | null; allowRegistration: boolean }>("/api/auth/me"),
+    request<{ user: SessionUser | null; allowRegistration: boolean; needsSetup: boolean }>(
+      "/api/auth/me",
+    ),
 
   login: (email: string, password: string) =>
     request<{ user: SessionUser }>("/api/auth/login", { method: "POST", body: { email, password } }),
