@@ -4,10 +4,12 @@ import { z } from "zod";
 import { getDb, type Db } from "../db/index.js";
 import type { MemberRole, ProjectRow } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
-import { requireUser } from "../auth/plugin.js";
+import { assertTokenScope, requireUser } from "../auth/plugin.js";
+import { reconcile } from "../sync-source.js";
 import {
   findDocumentInconsistencies,
   saveProjectRequestSchema,
+  syncRequestSchema,
   timelineDocSchema,
   type TimelineDoc,
 } from "../shared.js";
@@ -230,6 +232,64 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return { version: nextVersion, updatedAt: Number(after.updated_at) };
+  });
+
+  /* -------------------------------------------------------------- sync -- */
+  /*
+   * Reconciles the project with what an external source says it holds.
+   *
+   * No `baseVersion` from the caller: a plugin does not hold the document and
+   * so cannot supply one. The read-modify-write happens here instead, under a
+   * transaction with a guarded update. An editor with the project open will
+   * get a 409 on its next save and the existing conflict dialog handles it -
+   * that is the correct outcome, not something to design away.
+   */
+  app.post("/api/projects/:id/sync", async (request) => {
+    const user = requireUser(request);
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    assertTokenScope(request, id);
+
+    const body = syncRequestSchema.parse(request.body);
+    const db = await getDb();
+
+    const outcome = await db.transaction(async (tx) => {
+      const access = await loadAccess(tx, id, user.id);
+      assertCanEdit(access);
+
+      const current = parseStoredDoc(access.project);
+      const { doc: next, result } = reconcile(current, body);
+
+      const problems = findDocumentInconsistencies(next);
+      if (problems.length > 0) {
+        throw new HttpError(
+          422,
+          "inconsistent_document",
+          "The sync would leave the timeline inconsistent.",
+          problems,
+        );
+      }
+
+      const version = Number(access.project.version);
+      if (body.dryRun) return { ...result, version };
+
+      const nextVersion = version + 1;
+      await tx.run(
+        `UPDATE projects SET doc = ?, version = ?, updated_at = ?
+          WHERE id = ? AND version = ?`,
+        [JSON.stringify(next), nextVersion, Date.now(), id, version],
+      );
+
+      // The guarded UPDATE is what makes two concurrent syncs safe; confirm it
+      // actually took effect rather than assuming.
+      const after = await tx.get<ProjectRow>(`SELECT version FROM projects WHERE id = ?`, [id]);
+      if (!after || Number(after.version) !== nextVersion) {
+        throw new HttpError(409, "version_conflict", "The project changed during the sync.");
+      }
+
+      return { ...result, version: nextVersion };
+    });
+
+    return outcome;
   });
 
   /* ------------------------------------------------------------ delete -- */

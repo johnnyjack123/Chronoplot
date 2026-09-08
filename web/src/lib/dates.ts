@@ -9,6 +9,8 @@
  * `today()`, which asks what the user's calendar says right now.
  */
 
+import { snapToUnit } from "@shared";
+
 export type IsoDate = string;
 
 const DAY_MS = 86_400_000;
@@ -188,15 +190,9 @@ export function formatWithPrecision(date: IsoDate, precision: "day" | "month" | 
 
 /**
  * Snaps a date to the start (or inclusive end) of the unit its precision names.
- * Editing a month-precision bar should move it in whole months, and this is
- * what guarantees the stored dates match what the user was shown.
+ *
+ * Re-exported from the shared model rather than implemented here: the sync
+ * endpoint has to snap dates identically, and two implementations of "what a
+ * month-precision item means" would eventually disagree.
  */
-export function snapToPrecision(
-  date: IsoDate,
-  precision: "day" | "month" | "year",
-  edge: "start" | "end",
-): IsoDate {
-  if (precision === "day") return date;
-  if (precision === "month") return edge === "start" ? startOfMonth(date) : endOfMonth(date);
-  return edge === "start" ? startOfYear(date) : endOfYear(date);
-}
+export const snapToPrecision = snapToUnit;

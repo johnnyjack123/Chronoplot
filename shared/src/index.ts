@@ -32,6 +32,36 @@ export const isoDateSchema = z
 
 const idSchema = z.string().min(1).max(64);
 
+/**
+ * Days in a month, in UTC so it never depends on the reader's timezone.
+ */
+export function daysInMonth(year: number, monthIndex: number): number {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+/**
+ * Snaps a date to the boundary of the unit its precision names.
+ *
+ * This is document semantics, not presentation, which is why it lives here
+ * rather than in the editor: a month-precision item *means* the whole month, so
+ * a start of "2026-03-17" at month precision is 1 March and its end is 31
+ * March. The editor and the sync endpoint both have to agree on that, and the
+ * only way to guarantee it is one implementation.
+ */
+export function snapToUnit(
+  date: string,
+  precision: Precision,
+  edge: "start" | "end",
+): string {
+  if (precision === "day") return date;
+  if (precision === "year") return edge === "start" ? `${date.slice(0, 4)}-01-01` : `${date.slice(0, 4)}-12-31`;
+
+  if (edge === "start") return `${date.slice(0, 7)}-01`;
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7)) - 1;
+  return `${date.slice(0, 7)}-${String(daysInMonth(year, month)).padStart(2, "0")}`;
+}
+
 export const settingsSchema = z.object({
   /** Inclusive first day shown on the axis. */
   start: isoDateSchema,
@@ -70,6 +100,36 @@ export type Row = z.infer<typeof rowSchema>;
 export const itemKindSchema = z.enum(["bar", "milestone"]);
 export type ItemKind = z.infer<typeof itemKindSchema>;
 
+/**
+ * Where an item came from, when it was not drawn by hand.
+ *
+ * This is what lets a sync replace its own cards without touching anything a
+ * person made. Without it a sync would have to either wipe the project or
+ * guess which cards were once its own.
+ */
+export const itemSourceSchema = z.object({
+  kind: z.literal("obsidian"),
+  /** Names the vault, so two vaults can feed one project without collision. */
+  vault: z.string().min(1).max(200),
+  /** Vault-relative path. Together with kind+vault this identifies the item. */
+  path: z.string().min(1).max(1000),
+  /**
+   * Link back to the note.
+   *
+   * Restricted to two schemes on purpose: this value is user-controlled and
+   * ends up in an href in the editor and in every HTML export, so a
+   * `javascript:` URL here would be stored cross-site scripting.
+   */
+  url: z
+    .string()
+    .max(2000)
+    .refine((value) => /^(obsidian|https):\/\//i.test(value), {
+      message: "Only obsidian:// and https:// links are allowed",
+    })
+    .optional(),
+});
+export type ItemSource = z.infer<typeof itemSourceSchema>;
+
 export const itemSchema = z.object({
   id: idSchema,
   rowId: idSchema,
@@ -84,6 +144,8 @@ export const itemSchema = z.object({
   precision: precisionSchema,
   /** Optional completion, drawn as a darker inset fill. */
   progress: z.number().min(0).max(1).optional(),
+  /** Set only on items maintained by an external source. See above. */
+  source: itemSourceSchema.optional(),
 });
 export type Item = z.infer<typeof itemSchema>;
 
@@ -189,6 +251,54 @@ export const saveProjectRequestSchema = z.object({
   baseVersion: z.number().int().min(1),
 });
 export type SaveProjectRequest = z.infer<typeof saveProjectRequestSchema>;
+
+/* ------------------------------------------------------ external sync -- */
+
+/**
+ * One item as an external source describes it.
+ *
+ * Not the same shape as an `Item`: there is no id (the path identifies it) and
+ * the lane is a *name* rather than a row id, because the source has no idea
+ * what rows exist. Fields left out are preserved from whatever the project
+ * already has, so a colour chosen in Chronoplot survives a re-sync.
+ */
+export const syncItemSchema = z.object({
+  path: z.string().min(1).max(1000),
+  title: z.string().min(1).max(500),
+  start: isoDateSchema,
+  /** Omitted for a milestone. */
+  end: isoDateSchema.optional(),
+  precision: precisionSchema,
+  kind: itemKindSchema.optional(),
+  /** Lane name. Created if no lane by that name exists. */
+  lane: z.string().min(1).max(200).optional(),
+  color: z.number().int().min(0).max(8).optional(),
+  notes: z.string().max(5000).optional(),
+  progress: z.number().min(0).max(1).optional(),
+  url: itemSourceSchema.shape.url,
+});
+export type SyncItem = z.infer<typeof syncItemSchema>;
+
+export const syncRequestSchema = z.object({
+  source: z.object({
+    kind: z.literal("obsidian"),
+    vault: z.string().min(1).max(200),
+  }),
+  /** Reports what would change without changing anything. */
+  dryRun: z.boolean().optional(),
+  items: z.array(syncItemSchema).max(2000),
+});
+export type SyncRequest = z.infer<typeof syncRequestSchema>;
+
+export interface SyncResult {
+  created: number;
+  updated: number;
+  removed: number;
+  lanesCreated: string[];
+  warnings: string[];
+  version: number;
+  dryRun: boolean;
+}
 
 export const credentialsSchema = z.object({
   email: z.string().email().max(320),
