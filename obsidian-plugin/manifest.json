@@ -1,0 +1,10 @@
+{
+  "id": "chronoplot",
+  "name": "Chronoplot",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Turns dated notes into cards on a Chronoplot timeline, and links each card back to its note.",
+  "author": "johnnyjack123",
+  "authorUrl": "https://github.com/johnnyjack123/Chronoplot",
+  "isDesktopOnly": false
+}
