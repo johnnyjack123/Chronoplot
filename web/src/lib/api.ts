@@ -97,6 +97,17 @@ export interface SessionUser {
   role: "admin" | "user";
 }
 
+/** A token as it can be listed. The secret itself is never part of this. */
+export interface ApiTokenSummary {
+  id: string;
+  name: string;
+  projectId: string | null;
+  projectTitle: string | null;
+  createdAt: number;
+  lastUsedAt: number | null;
+  expiresAt: number | null;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -131,6 +142,19 @@ export const api = {
 
   updateProfile: (name: string) =>
     request<{ user: SessionUser }>("/api/auth/profile", { method: "PATCH", body: { name } }),
+
+  /* --------------------------------------------------------- api tokens -- */
+
+  listTokens: () => request<{ tokens: ApiTokenSummary[] }>("/api/tokens"),
+
+  /** The only call that ever returns the secret. It cannot be read back. */
+  createToken: (name: string, projectId: string | null, expiresInDays: number | null) =>
+    request<{ id: string; token: string }>("/api/tokens", {
+      method: "POST",
+      body: { name, projectId, expiresInDays },
+    }),
+
+  revokeToken: (id: string) => request<{ ok: true }>(`/api/tokens/${id}`, { method: "DELETE" }),
 
   /* -------------------------------------------------------------- admin -- */
 

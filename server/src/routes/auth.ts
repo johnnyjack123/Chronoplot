@@ -6,7 +6,7 @@ import { getDb } from "../db/index.js";
 import { isRegistrationOpen, type UserRow } from "../db/schema.js";
 import { HttpError } from "../http-error.js";
 import { dummyVerify, hashPassword, verifyPassword } from "../auth/password.js";
-import { clearAuthCookies, requireUser, setAuthCookies } from "../auth/plugin.js";
+import { clearAuthCookies, requireSessionUser, requireUser, setAuthCookies } from "../auth/plugin.js";
 import { createSession, destroySession } from "../auth/session.js";
 import { credentialsSchema, registerSchema } from "../shared.js";
 
@@ -145,7 +145,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/auth/password", async (request, reply) => {
-    const user = requireUser(request);
+    // A session, not a token: changing the password is a change to how the
+    // account is accessed at all.
+    const user = requireSessionUser(request);
     const body = credentialsSchema
       .pick({ password: true })
       .extend({ currentPassword: credentialsSchema.shape.password })

@@ -13,6 +13,7 @@ import { HttpError } from "./http-error.js";
 import { authRoutes } from "./routes/auth.js";
 import { projectRoutes } from "./routes/projects.js";
 import { adminRoutes } from "./routes/admin.js";
+import { tokenRoutes } from "./routes/tokens.js";
 
 const app = Fastify({
   logger: config.isProduction
@@ -96,6 +97,13 @@ await app.register(async (scope) => {
 await app.register(async (scope) => {
   scope.addHook("onRequest", scope.rateLimit({ max: 120, timeWindow: "1 minute" }));
   await adminRoutes(scope);
+});
+
+// Tighter than the project API: a client minting tokens in a loop is either
+// broken or hostile, and a legitimate one needs a handful ever.
+await app.register(async (scope) => {
+  scope.addHook("onRequest", scope.rateLimit({ max: 60, timeWindow: "5 minutes" }));
+  await tokenRoutes(scope);
 });
 
 /*

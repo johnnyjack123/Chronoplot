@@ -4,13 +4,19 @@ import { useSessionStore } from "@/state/session";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { Field, Input } from "@/components/ui/Field";
+import { Segmented } from "@/components/ui/Controls";
+import { TokenPanel } from "./TokenPanel";
+
+type Tab = "profile" | "tokens";
 
 /**
- * The account's own settings: display name and password.
+ * The account's own settings: display name, password, and API tokens.
  *
  * Kept separate from the admin screen on purpose - changing your own name is
  * something every account can do, and folding it into an administrator-only
- * page would hide it from most people who need it.
+ * page would hide it from most people who need it. Tokens live here for the
+ * same reason: they act as you, so they are yours to manage, not an
+ * administrator's.
  */
 export function AccountDialog({
   open,
@@ -28,9 +34,11 @@ export function AccountDialog({
 
   const [nameState, setNameState] = useState<{ error?: string; done?: boolean; busy?: boolean }>({});
   const [passwordState, setPasswordState] = useState<{ error?: string; done?: boolean; busy?: boolean }>({});
+  const [tab, setTab] = useState<Tab>("profile");
 
   useEffect(() => {
     if (!open) return;
+    setTab("profile");
     setName(user?.name ?? "");
     setCurrentPassword("");
     setNewPassword("");
@@ -80,7 +88,21 @@ export function AccountDialog({
       footer={<Button onClick={() => onOpenChange(false)}>Done</Button>}
     >
       <div className="flex flex-col gap-6">
-        <section className="flex flex-col gap-3">
+        <Segmented<Tab>
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "profile", label: "Profile" },
+            { value: "tokens", label: "API tokens" },
+          ]}
+        />
+
+        {/* The inactive tab unmounts. That matters for the token panel: a
+            freshly created secret must not still be sitting there on the way
+            back, and an in-flight name edit is cheap to lose by comparison. */}
+        {tab === "tokens" ? <TokenPanel /> : null}
+
+        <section className="flex flex-col gap-3" hidden={tab !== "profile"}>
           <h3 className="text-micro uppercase text-ink-subtle">Display name</h3>
           <Field label="Name" hideLabel error={nameState.error ?? null}>
             {(props) => (
@@ -110,7 +132,7 @@ export function AccountDialog({
           </div>
         </section>
 
-        <section className="flex flex-col gap-3 border-t border-line pt-5">
+        <section className="flex flex-col gap-3 border-t border-line pt-5" hidden={tab !== "profile"}>
           <h3 className="text-micro uppercase text-ink-subtle">Password</h3>
 
           <Field label="Current password">

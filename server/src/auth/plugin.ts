@@ -10,13 +10,19 @@ import {
   safeEqual,
   type SessionUser,
 } from "./session.js";
+import { resolveApiToken } from "./tokens.js";
 import { HttpError } from "../http-error.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    /** Populated for every request that carries a valid session cookie. */
+    /** Populated for every request that carries a valid session or API token. */
     user?: SessionUser;
     sessionToken?: string;
+    /**
+     * Set instead of `sessionToken` when the caller authenticated with an API
+     * token. Carries the token's project scope, if it has one.
+     */
+    apiToken?: { tokenId: string; projectId: string | null };
   }
 }
 
@@ -50,6 +56,7 @@ export function clearAuthCookies(reply: FastifyReply): void {
 export async function authPlugin(app: FastifyInstance): Promise<void> {
   app.decorateRequest("user", undefined);
   app.decorateRequest("sessionToken", undefined);
+  app.decorateRequest("apiToken", undefined);
 
   app.addHook("onRequest", async (request: FastifyRequest) => {
     const token = request.cookies[SESSION_COOKIE];
@@ -61,6 +68,33 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
       request.user = user;
       request.sessionToken = token;
     }
+  });
+
+  /*
+   * API tokens, for clients that are not a browser.
+   *
+   * Deliberately sets `user` but never `sessionToken`. The CSRF hook below
+   * keys off `sessionToken`, and setting it here would drag every token
+   * request into a check that demands a cookie and a matching header no
+   * plugin can produce - a 403 raised nowhere near its cause.
+   *
+   * Skipped entirely when a session cookie already authenticated the request,
+   * so a browser cannot be talked into using a token it happens to have.
+   */
+  app.addHook("onRequest", async (request: FastifyRequest) => {
+    if (request.user) return;
+
+    const db = await getDb();
+    const bearer = await resolveApiToken(db, request.headers.authorization);
+    if (!bearer) return;
+
+    request.user = {
+      id: bearer.id,
+      email: bearer.email,
+      name: bearer.name,
+      role: bearer.role,
+    };
+    request.apiToken = { tokenId: bearer.tokenId, projectId: bearer.projectId };
   });
 
   /*
@@ -93,10 +127,43 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
   });
 }
 
-/** Throws 401 unless the request carries a valid session. */
+/** Throws 401 unless the request is authenticated, by cookie or by API token. */
 export function requireUser(request: FastifyRequest): SessionUser {
   if (!request.user) {
     throw new HttpError(401, "unauthenticated", "You must be signed in.");
   }
   return request.user;
+}
+
+/**
+ * Throws unless a real browser session authenticated the request.
+ *
+ * Used for managing API tokens and passwords. If a token could mint tokens,
+ * a leaked one would be an unrevokable foothold: revoke it and it has already
+ * issued three more. Anything that changes how the account is accessed needs
+ * the account, not one of its keys.
+ */
+export function requireSessionUser(request: FastifyRequest): SessionUser {
+  const user = requireUser(request);
+  if (!request.sessionToken) {
+    throw new HttpError(
+      403,
+      "session_required",
+      "This needs a signed-in browser session, not an API token.",
+    );
+  }
+  return user;
+}
+
+/**
+ * Enforces a token's project scope.
+ *
+ * A scoped token authenticates its owner but must not reach past the one
+ * project it was issued for.
+ */
+export function assertTokenScope(request: FastifyRequest, projectId: string): void {
+  const scope = request.apiToken?.projectId;
+  if (scope && scope !== projectId) {
+    throw new HttpError(403, "token_scope", "This token is scoped to a different project.");
+  }
 }

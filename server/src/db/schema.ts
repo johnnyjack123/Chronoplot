@@ -35,6 +35,17 @@ export interface ProjectRow {
   updated_at: number;
 }
 
+export interface ApiTokenRow {
+  id: string;
+  user_id: string;
+  name: string;
+  token_hash: string;
+  project_id: string | null;
+  created_at: number;
+  last_used_at: number | null;
+  expires_at: number | null;
+}
+
 export type MemberRole = "owner" | "editor" | "viewer";
 
 export interface MemberRow {
@@ -110,6 +121,27 @@ export async function migrate(db: Db, envAllowsRegistration = true): Promise<voi
        key   TEXT PRIMARY KEY,
        value TEXT NOT NULL
      )`,
+
+    /*
+     * Tokens for clients that are not a browser - the Obsidian plugin, or a
+     * script. Only the SHA-256 is stored, exactly as for sessions: a database
+     * leak must not hand anyone a working token.
+     *
+     * project_id scopes a token to one project. Null means "everything its
+     * owner can reach", which is convenient and worth avoiding for anything
+     * that stores the token on disk.
+     */
+    `CREATE TABLE IF NOT EXISTS api_tokens (
+       id           TEXT PRIMARY KEY,
+       user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+       name         TEXT NOT NULL,
+       token_hash   TEXT NOT NULL UNIQUE,
+       project_id   TEXT REFERENCES projects(id) ON DELETE CASCADE,
+       created_at   ${ts} NOT NULL,
+       last_used_at ${ts},
+       expires_at   ${ts}
+     )`,
+    `CREATE INDEX IF NOT EXISTS api_tokens_user_id_idx ON api_tokens (user_id)`,
   ];
 
   for (const statement of statements) {
