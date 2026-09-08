@@ -193,6 +193,18 @@ export const MagnetIcon = (p: IconProps) => (
   </Icon>
 );
 
+/*
+ * A note with a folded corner, for cards that a note in a vault owns. Not the
+ * Obsidian logo: shipping someone's trademark inside the icon set would tie
+ * this glyph to one tool, and the same mark has to serve any future source.
+ */
+export const NoteIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.25 2.75h5.5l4 4v6.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5Z" />
+    <path d="M8.75 2.75v4h4" />
+  </Icon>
+);
+
 export const CloudIcon = (p: IconProps) => (
   <Icon {...p}><path d="M4.75 12.25a3 3 0 0 1-.3-5.98 3.75 3.75 0 0 1 7.2-.77 2.75 2.75 0 0 1 .1 5.47" /><path d="M4.75 12.25h7" /></Icon>
 );

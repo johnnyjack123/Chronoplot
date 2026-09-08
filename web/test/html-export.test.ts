@@ -127,5 +127,76 @@ check("pan is registered", html.includes('addEventListener("pointerdown"'));
   check("cards survive without lane names", bare.includes("Platform work"));
 }
 
+/* 7. Cards that came from a note link back to it. */
+{
+  const sourced = buildHtml(
+    {
+      ...doc,
+      groups: [],
+      links: [],
+      rows: [{ id: "r1", groupId: null, title: "Notes" }],
+      items: [
+        { id: "s1", rowId: "r1", kind: "bar", title: "From a note",
+          color: 1, start: "2026-03-01", end: "2026-06-30", precision: "day",
+          source: { kind: "obsidian", vault: "Vault", path: "notes/a.md",
+            url: "obsidian://open?vault=Vault&file=notes%2Fa" } },
+        { id: "s2", rowId: "r1", kind: "milestone", title: "A dated note",
+          color: 2, start: "2026-08-01", end: "2026-08-01", precision: "day",
+          source: { kind: "obsidian", vault: "Vault", path: "notes/b.md",
+            url: "obsidian://open?vault=Vault&file=notes%2Fb" } },
+        // A source with no url at all - the sync stores one, but a document
+        // written by hand or by an older plugin may not have.
+        { id: "s3", rowId: "r1", kind: "bar", title: "No way back",
+          color: 4, start: "2026-11-01", end: "2026-11-30", precision: "day",
+          source: { kind: "obsidian", vault: "Vault", path: "notes/c.md" } },
+        { id: "s4", rowId: "r1", kind: "bar", title: "Hand-made",
+          color: 3, start: "2026-09-01", end: "2026-10-31", precision: "day" },
+      ],
+    },
+    { title: "T", theme: "midnight", showLaneLabels: true },
+  );
+
+  check("a source-backed card is wrapped in a link",
+    sourced.includes(`<a class="cp-link" href="obsidian://open?vault=Vault&amp;file=notes%2Fa">`));
+  check("the milestone form links too",
+    sourced.includes(`<a class="cp-link" href="obsidian://open?vault=Vault&amp;file=notes%2Fb">`));
+  check("only the two cards with a url are links",
+    (sourced.match(/<a class="cp-link"/g) ?? []).length === 2,
+    `${(sourced.match(/<a class="cp-link"/g) ?? []).length} link(s)`);
+  check("a source without a url is left unwrapped", sourced.includes(`data-title="No way back"`));
+  // A card with no source keeps its bare <g>: nothing was opened in front of it.
+  const plain = sourced.indexOf(`<g class="cp-card" data-title="Hand-made"`);
+  check("a card with no source is not a link",
+    plain > 0 && !sourced.slice(plain - 40, plain).includes("cp-link"));
+  check("every opened link is closed",
+    (sourced.match(/<a class="cp-link"/g) ?? []).length === (sourced.match(/<\/a>/g) ?? []).length);
+  check("obsidian links do not open a tab first",
+    !/<a class="cp-link" href="obsidian:[^>]*target=/.test(sourced));
+  check("a drag over a card cannot follow its link", sourced.includes("travelled > 6"));
+  // The one place a scheme other than obsidian:// or https:// could appear is a
+  // stored url, and the model refuses those - but the exporter is the last stop
+  // before someone else's page, so assert it here as well.
+  check("no javascript: url reaches the output", !/javascript:/i.test(sourced));
+
+  const external = buildHtml(
+    {
+      ...doc,
+      groups: [], links: [],
+      rows: [{ id: "r1", groupId: null, title: "Notes" }],
+      items: [
+        { id: "s1", rowId: "r1", kind: "bar", title: "Published note",
+          color: 1, start: "2026-03-01", end: "2026-06-30", precision: "day",
+          source: { kind: "obsidian", vault: "Vault", path: "a.md",
+            url: "https://notes.example.com/a" } },
+      ],
+    },
+    { title: "T", theme: "midnight", showLaneLabels: true },
+  );
+  check("an https source opens in a new tab", external.includes(`target="_blank" rel="noopener"`));
+  // Still self-contained: an anchor is followed on click, never fetched to render.
+  check("the https link is only an anchor",
+    !/(src)\s*=\s*["']https?:/i.test(external) && !/fetch\(|XMLHttpRequest/.test(external));
+}
+
 console.log(failed === 0 ? "\nAll HTML export checks passed" : `\n${failed} check(s) failed`);
 process.exit(failed === 0 ? 0 : 1);

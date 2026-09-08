@@ -144,6 +144,30 @@ function ItemInspector({
         </Field>
       </PanelSection>
 
+      {item.source ? (
+        <PanelSection title="From Obsidian">
+          <p className="truncate-1 text-caption text-ink-subtle" title={item.source.path}>
+            {item.source.vault} · {item.source.path}
+          </p>
+          {item.source.url ? (
+            <Button
+              icon={<LinkIcon />}
+              onClick={() => {
+                // A custom scheme, so the browser hands it to the OS. It only
+                // works where Obsidian is installed and that vault exists.
+                window.location.href = item.source!.url!;
+              }}
+            >
+              Open the note
+            </Button>
+          ) : null}
+          <p className="text-caption text-ink-subtle">
+            The note owns this card's title and dates — edit them there. Colour and lane are
+            yours and survive a re-sync.
+          </p>
+        </PanelSection>
+      ) : null}
+
       <PanelSection title="Colour">
         <div className="grid grid-cols-9 gap-1.5">
           {CARD_SLOTS.map((slot) => (

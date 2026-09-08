@@ -1,7 +1,9 @@
 import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import type { ItemSource } from "@shared";
 import { cn } from "@/lib/cn";
 import { formatWithPrecision } from "@/lib/dates";
 import { commands, useEditorStore } from "@/state/editor-store";
+import { NoteIcon } from "@/components/icons";
 import { cardFill, cardInk } from "./colors";
 import type { PlacedItem } from "./geometry";
 
@@ -80,6 +82,44 @@ function TitleEditor({
   );
 }
 
+/**
+ * Jumps to the note this card came from.
+ *
+ * It stops the pointer event dead: a click here must not also select the card
+ * or start a drag, and losing the selection to a jump would leave the card
+ * uneditable. The `href` is a real link so the browser hands `obsidian://` to
+ * the OS - and only `obsidian://` or `https://` can be stored, so this cannot
+ * become a `javascript:` link.
+ */
+function SourceLink({
+  source,
+  className,
+  style,
+}: {
+  source: ItemSource;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  if (!source.url) return null;
+  return (
+    <a
+      href={source.url}
+      style={style}
+      title={`Open ${source.path} in ${source.vault}`}
+      aria-label={`Open the note ${source.path} in ${source.vault}`}
+      onPointerDown={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      className={cn(
+        "rounded-[3px] opacity-0 transition-opacity duration-[var(--dur-fast)]",
+        "group-hover:opacity-70 hover:opacity-100 focus-visible:opacity-100",
+        className,
+      )}
+    >
+      <NoteIcon className="size-3.5" />
+    </a>
+  );
+}
+
 export const TimelineCard = memo(function TimelineCard({
   placed,
   selected,
@@ -121,7 +161,7 @@ export const TimelineCard = memo(function TimelineCard({
     const size = placed.height * 0.62;
     return (
       <div
-        className="absolute flex items-center transition-[top] duration-[var(--dur-fast)] ease-standard"
+        className="group absolute flex items-center transition-[top] duration-[var(--dur-fast)] ease-standard"
         style={{ left: placed.x, top: placed.y, height: placed.height }}
         {...hoverProps}
       >
@@ -149,12 +189,14 @@ export const TimelineCard = memo(function TimelineCard({
           <span
             onDoubleClick={beginEdit}
             className={cn(
-              "ml-2 whitespace-nowrap text-caption text-ink",
-              placed.labelSide === "left" && "order-first ml-0 mr-2",
-              readOnly ? "pointer-events-none" : "cursor-text",
+              "ml-2 flex items-center gap-1 whitespace-nowrap text-caption text-ink",
+              placed.labelSide === "left" && "order-first ml-0 mr-2 flex-row-reverse",
             )}
           >
-            {item.title}
+            {/* Read-only keeps the text inert, but the link to the note stays
+                usable - reading is exactly when following it is wanted. */}
+            <span className={readOnly ? "pointer-events-none" : "cursor-text"}>{item.title}</span>
+            {item.source ? <SourceLink source={item.source} className="text-ink-subtle" /> : null}
           </span>
         )}
       </div>
@@ -209,11 +251,25 @@ export const TimelineCard = memo(function TimelineCard({
 
         {!externalLabel && !editing ? (
           <span
-            className="pointer-events-none relative flex h-full items-center truncate-1 px-2 text-label"
+            className={cn(
+              "pointer-events-none relative flex h-full items-center truncate-1 px-2 text-label",
+              // Room for the glyph, so a title that fills the card does not run
+              // underneath it.
+              item.source?.url && "pr-7",
+            )}
             style={{ color: ink }}
           >
             {item.title}
           </span>
+        ) : null}
+
+        {/* Inside the card, but clear of the 8px resize grips on either edge. */}
+        {!externalLabel && item.source ? (
+          <SourceLink
+            source={item.source}
+            className="absolute right-2 top-1/2 -translate-y-1/2"
+            style={{ color: ink }}
+          />
         ) : null}
       </div>
 
@@ -222,12 +278,13 @@ export const TimelineCard = memo(function TimelineCard({
         <span
           onDoubleClick={beginEdit}
           className={cn(
-            "absolute whitespace-nowrap text-caption text-ink",
-            readOnly ? "pointer-events-none" : "cursor-text",
+            "absolute flex items-center gap-1 whitespace-nowrap text-caption text-ink",
+            placed.labelSide === "left" && "flex-row-reverse",
           )}
           style={labelStyle}
         >
-          {item.title}
+          <span className={readOnly ? "pointer-events-none" : "cursor-text"}>{item.title}</span>
+          {item.source ? <SourceLink source={item.source} className="text-ink-subtle" /> : null}
         </span>
       ) : null}
 

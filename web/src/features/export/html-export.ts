@@ -112,13 +112,32 @@ function renderCards(layout: Layout, palette: ReturnType<typeof readPalette>): s
       // copy of the model.
       const meta = `class="cp-card" data-title="${title}" data-range="${range}"`;
 
+      /*
+       * A card that came from a note links back to it. The scheme was validated
+       * when the item was stored - only obsidian:// and https:// get that far -
+       * so this cannot become a javascript: link here.
+       *
+       * A real anchor rather than a click handler, so the link survives with
+       * scripting off and right-click still offers "copy link". `obsidian://`
+       * is handed to the OS, so it must not open a tab first: a new window
+       * would be left behind empty.
+       */
+      const link = item.source?.url;
+      const external = link?.toLowerCase().startsWith("https://");
+      const open = link
+        ? `<a class="cp-link" href="${escapeHtml(link)}"${external ? ` target="_blank" rel="noopener"` : ""}>`
+        : "";
+      const close = link ? `</a>` : "";
+
       if (item.kind === "milestone") {
         const size = placed.height * 0.62;
         parts.push(
-          `<g ${meta}>` +
+          open +
+            `<g ${meta}>` +
             `<rect x="${placed.x}" y="${mid - size / 2}" width="${size}" height="${size}" rx="3" fill="${fill}" transform="rotate(45 ${placed.x + size / 2} ${mid})"/>` +
             `<text x="${placed.x + size + 6}" y="${mid + 4}" class="cp-outside">${title}</text>` +
-            `</g>`,
+            `</g>` +
+            close,
         );
         continue;
       }
@@ -136,11 +155,13 @@ function renderCards(layout: Layout, palette: ReturnType<typeof readPalette>): s
           : "";
 
       parts.push(
-        `<g ${meta}>` +
+        open +
+          `<g ${meta}>` +
           `<rect x="${placed.x}" y="${placed.y}" width="${Math.max(placed.width, 2)}" height="${placed.height}" rx="5" fill="${fill}"/>` +
           progress +
           label +
-          `</g>`,
+          `</g>` +
+          close,
       );
     }
   }
@@ -294,6 +315,9 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
   .cp-outside { fill: ${ink}; font-size: 11px; }
   .cp-card { cursor: default; }
   .cp-card:hover { filter: brightness(1.08); }
+  /* A card backed by a note is the only clickable thing on the canvas. */
+  .cp-link { cursor: pointer; }
+  .cp-link:hover .cp-card { filter: brightness(1.14); }
 
   .cp-bar {
     position: absolute; left: 12px; top: 12px; right: 12px;
@@ -410,20 +434,34 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
     apply();
   }, { passive: false });
 
-  var dragging = false, lastX = 0, lastY = 0, pointer = null;
+  var dragging = false, lastX = 0, lastY = 0, pointer = null, travelled = 0;
   stage.addEventListener("pointerdown", function (e) {
     // Stops the browser starting a text selection or a native image drag.
+    // Cancelling pointerdown suppresses mousedown but not click, so the links
+    // on source-backed cards still activate.
     e.preventDefault();
     dragging = true; pointer = e.pointerId; lastX = e.clientX; lastY = e.clientY;
+    travelled = 0;
     stage.setPointerCapture(pointer);
     stage.classList.add("cp-dragging");
   });
   stage.addEventListener("pointermove", function (e) {
     if (!dragging) return;
-    tx += e.clientX - lastX; ty += e.clientY - lastY;
+    var dx = e.clientX - lastX, dy = e.clientY - lastY;
+    travelled += Math.abs(dx) + Math.abs(dy);
+    tx += dx; ty += dy;
     lastX = e.clientX; lastY = e.clientY;
     apply();
   });
+
+  /*
+   * Panning that happens to start on a linked card must not end in a jump to
+   * Obsidian. The click lands after the drag, so it is cancelled once the
+   * pointer has moved further than a shaky hand would.
+   */
+  stage.addEventListener("click", function (e) {
+    if (travelled > 6) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
   function endDrag() {
     if (!dragging) return;
     dragging = false;
