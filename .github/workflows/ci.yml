@@ -54,6 +54,8 @@ jobs:
             echo "--- $suite"
             npx tsx --tsconfig web/tsconfig.json "web/test/$suite.test.ts"
           done
+          echo "--- reconcile"
+          npx tsx --tsconfig server/tsconfig.json server/test/reconcile.test.ts
 
       - name: Smoke test against the production build
         env:
@@ -95,6 +97,42 @@ jobs:
             sleep 0.5
           done
           BASE=http://localhost:5187 ORIGIN=http://localhost:5187 node server/test/first-run.mjs
+
+  plugin:
+    name: Obsidian plugin
+    runs-on: ubuntu-latest
+    # Its own job because it has its own dependency tree: the plugin sits
+    # outside the npm workspaces, so the root `npm ci` never sees it.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: obsidian-plugin/package-lock.json
+
+      - run: npm ci
+        working-directory: obsidian-plugin
+
+      - name: Typecheck and bundle
+        run: npm run build
+        working-directory: obsidian-plugin
+
+      - run: npm test
+        working-directory: obsidian-plugin
+
+      # main.js is committed so the plugin can be installed with a git pull
+      # alone. If the build produces something different, the committed copy is
+      # stale and whoever installs it gets the previous version.
+      - name: The committed bundle matches the source
+        run: |
+          if ! git diff --quiet -- main.js; then
+            echo "obsidian-plugin/main.js is out of date. Run 'npm run build' in obsidian-plugin/ and commit it."
+            git diff --stat -- main.js
+            exit 1
+          fi
+        working-directory: obsidian-plugin
 
   build:
     name: Build ${{ matrix.platform }}

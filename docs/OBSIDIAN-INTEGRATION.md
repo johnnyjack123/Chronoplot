@@ -4,7 +4,13 @@ A plan for an Obsidian plugin that turns dated notes into Chronoplot cards, and
 for the Chronoplot changes it needs. Written to be picked up cold: everything
 below is a decision or an open question, not a summary of a conversation.
 
-**Status:** design only. Nothing here is built yet.
+**Status:** built. Phases 1–4 are in the tree; §9 records what was decided and
+§10 says where each piece lives. Phase 5 is still open.
+
+One departure from the plan below: the plugin lives in this repository at
+`obsidian-plugin/`, not in a separate one. It is deliberately *outside* the npm
+workspaces — it builds against Obsidian's API and has nothing to say to the
+server's dependency tree — so it has its own `npm install` and its own build.
 
 ---
 
@@ -285,8 +291,8 @@ can target a heading or block, but it is a third-party dependency. Plain
 
 ## 8. The plugin
 
-A separate repository — it has its own build (esbuild), its own release process,
-and no reason to live inside the server.
+`obsidian-plugin/` in this repository, but outside the npm workspaces: it has
+its own `package.json`, its own `npm install`, and its own esbuild build.
 
 ```
 main.ts            plugin entry, commands, ribbon, status bar
@@ -301,8 +307,8 @@ types.ts
 account it authenticated as, then the list of bindings with a project picker
 fed from `GET /api/projects`.
 
-**Commands:** "Sync all", "Sync the project this note belongs to", "Preview sync
-(dry run)".
+**Commands**, as built: "Sync to Chronoplot", "Preview sync (changes nothing)",
+and "List dated notes that no project claims" — the last answers §9.5.
 
 **When to sync:** manual by default. Offer "on save, debounced" and "every N
 minutes" as options, both off initially — a plugin that talks to the network
@@ -316,46 +322,60 @@ per-note warnings after a sync. Silent partial failure is the thing to avoid.
 
 ---
 
-## 9. Decisions still open
+## 9. Decisions that were open, and how they went
 
-1. **Property prefix.** `chronoplot-start` is explicit but long. Worth offering
-   a shorter alias (`cp-start`)?
-2. **Milestones.** Is "start with no end" the right signal, or should
-   `chronoplot-kind: milestone` be required?
-3. **Deleting a note.** Right now its card disappears at the next sync. Should
-   there be a grace period, or a "removed" report before it happens?
-4. **Multiple vaults into one project.** The protocol allows it (`vault` is part
-   of the key). Should the UI encourage it?
-5. **Notes outside every binding** that still carry the properties — ignore
-   silently, or report them as unassigned?
-6. **Token scope.** Should project-scoped tokens be the only kind offered to the
-   plugin, given the storage caveat in §5?
+1. **Property prefix.** Configurable, defaulting to `chronoplot`. Anyone who
+   wants `cp-start` sets the prefix to `cp`; no alias table to keep in sync.
+2. **Milestones.** Start with no end *is* the signal, and
+   `chronoplot-kind: milestone` also works. Requiring the property would mean
+   the commonest case needs two lines instead of one.
+3. **Deleting a note.** Its card goes at the next sync, with no grace period —
+   but `dryRun` reports removals first, and the sync report names them. A grace
+   period would mean storing a tombstone and explaining it; "preview, then
+   sync" is the same safety with nothing to remember.
+4. **Multiple vaults into one project.** Allowed, and the `vault` key is what
+   makes it safe: a sync from one vault never touches another's cards. Not
+   encouraged in the UI, because the sensible default is one vault.
+5. **Notes outside every binding.** Reported, by the command "List dated notes
+   that no project claims". Silence would make a typo'd folder path look like a
+   working configuration.
+6. **Token scope.** Recommended, not enforced. The settings tab explains why
+   (§5's storage caveat) and the token dialog defaults to naming a project, but
+   an unscoped token stays possible — someone syncing several projects from one
+   vault would otherwise need to paste several tokens.
 
 ---
 
-## 10. Suggested build order
+## 10. What was built, and where
 
-Each phase is independently useful and independently testable.
+**Phase 1 — API tokens. Done.**
+`api_tokens` table in `server/src/db/schema.ts`, `server/src/auth/tokens.ts`,
+the bearer hook in `server/src/auth/plugin.ts`, `server/src/routes/tokens.ts`,
+and the "API tokens" tab in `web/src/features/account/`. Covered by
+`server/test/smoke.mjs`: a token works, a revoked one does not, a scoped one is
+refused elsewhere, and a token can neither mint tokens nor change the password.
 
-**Phase 1 — API tokens (Chronoplot repo).**
-Table and migration, bearer auth path, token management in the account dialog.
-Testable through the existing smoke test: a token works, a revoked one does not,
-a token cannot exceed its owner's access.
+**Phase 2 — the sync endpoint. Done.**
+`itemSourceSchema` in `shared/src/index.ts`, the pure reconciler in
+`server/src/sync-source.ts`, and `POST /api/projects/:id/sync` in
+`server/src/routes/projects.ts`. `server/test/reconcile.test.ts` exercises the
+reconciler directly (36 checks); the smoke test drives the endpoint over HTTP,
+including the `javascript:` refusal.
 
-**Phase 2 — the sync endpoint (Chronoplot repo).**
-`source` on the item schema, `POST /api/projects/:id/sync` with `dryRun`, URL
-scheme validation. Testable entirely without Obsidian, by posting fixtures.
+**Phase 3 — links back. Done.**
+`SourceLink` in `web/src/features/timeline/TimelineCard.tsx` (the glyph travels
+with the title, so it never lands under a resize grip), the "From Obsidian"
+section in `web/src/features/editor/Inspector.tsx`, and `<a class="cp-link">`
+wrappers in `web/src/features/export/html-export.ts`. The export's pan handler
+cancels a click that moved more than 6px, so panning across a card does not
+jump to Obsidian.
 
-**Phase 3 — links back (Chronoplot repo).**
-Inspector button, card glyph, HTML export anchors.
+**Phase 4 — the plugin. Done.** `obsidian-plugin/`, with
+`obsidian-plugin/test/frontmatter.test.ts` covering the leading-zero trap.
 
-**Phase 4 — the plugin (new repo).**
-Settings, scanner, frontmatter parser, client, commands. The parser deserves its
-own unit tests first: it is where the leading-zero trap lives, and it is pure
-string handling with no Obsidian dependency.
-
-**Phase 5 — polish.**
-Scheduled sync, per-note warnings modal, vault rename repair.
-
-Phases 1 and 2 make the whole thing exercisable with `curl` before a single line
-of plugin code exists. That is the right place to start.
+**Phase 5 — polish. Mostly done.**
+Sync on save and "every N minutes" are both in the settings tab, both off by
+default; the per-note warnings modal is `ReportModal` in `main.ts`. Still open:
+**vault rename repair.** Renaming a vault invalidates every stored `url`, and
+nothing currently rewrites them — a re-sync from the renamed vault fixes its own
+cards, so the gap only shows on a project nobody re-syncs.

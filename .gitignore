@@ -13,3 +13,8 @@ backups/
 .DS_Store
 .vite/
 coverage/
+
+# obsidian-plugin/main.js is deliberately NOT ignored. It is a build artifact,
+# but it is also the file you copy into a vault - committing it means installing
+# the plugin needs a git pull and nothing else, no Node toolchain on the machine
+# holding the vault. CI rebuilds it, so a stale commit shows up as a diff.

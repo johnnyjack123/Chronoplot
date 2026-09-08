@@ -149,6 +149,52 @@ with a readable message rather than a 422.
 
 ---
 
+## The Obsidian plugin
+
+Dated notes become cards. `obsidian-plugin/` in this repository holds it;
+`obsidian-plugin/README.md` covers building and installing it, and
+`docs/OBSIDIAN-INTEGRATION.md` explains the design.
+
+The short version:
+
+1. **Make a token.** On the project list, click your name, then **API tokens**.
+   Scope it to one project. It is shown once — Chronoplot stores only its hash.
+2. **Point the plugin at your server** and paste the token in.
+3. **Say which notes feed which project**, under Projects in the plugin
+   settings: a project, then the folders to include.
+4. **Date some notes.** Two frontmatter keys are enough:
+
+   ```yaml
+   ---
+   chronoplot-start: "01.03.2026"
+   chronoplot-end: "30.09.2026"
+   ---
+   ```
+
+   Quote the dates. Unquoted, YAML reads `01.03.2026` as a string but
+   `01032026` as a *number* and drops the leading zero. The plugin recovers the
+   likely value and warns, but quoting removes the guess.
+
+   A start with no end is a milestone. `chronoplot-title`, `-lane`, `-color` and
+   `-kind` are optional.
+5. **Run "Preview sync (changes nothing)"** from the command palette. It
+   reports what a sync would do. Then run **Sync to Chronoplot**.
+
+Notes own titles and dates; Chronoplot owns colour, lane and position, and a
+re-sync leaves them alone. Deleting a note removes its card at the next sync —
+cards you made by hand in Chronoplot are never touched, and neither are cards
+from a different vault.
+
+A synced card shows a small note glyph; clicking it opens the note. The same
+link is in the inspector, and in HTML exports.
+
+> The plugin's token sits in `.obsidian/plugins/chronoplot/data.json` inside
+> your vault, in plain text. If the vault is synced or in git, the token goes
+> with it — which is the argument for scoping it to one project and giving it
+> an expiry.
+
+---
+
 ## Themes
 
 **Midnight** (default), **Eclipse**, **Abyss**, **Daylight**, **Parchment**.

@@ -50,12 +50,23 @@ npm run typecheck
 npm start              # run the built server, which also serves the built app
 
 node server/test/smoke.mjs                                        # needs a server running
+node server/test/first-run.mjs                                    # needs an empty database
 npx tsx --tsconfig web/tsconfig.json web/test/dates.test.ts       # calendar maths
 npx tsx --tsconfig web/tsconfig.json web/test/axis.test.ts        # axis windowing + zoom
 npx tsx --tsconfig web/tsconfig.json web/test/reorder.test.ts     # lane and group ordering
 npx tsx --tsconfig web/tsconfig.json web/test/packing.test.ts     # labels, snapping, link routing
 npx tsx --tsconfig web/tsconfig.json web/test/pdf-plan.test.ts    # pagination and scale
 npx tsx --tsconfig web/tsconfig.json web/test/html-export.test.ts # HTML output and escaping
+npx tsx --tsconfig server/tsconfig.json server/test/reconcile.test.ts  # Obsidian sync reconciler
+```
+
+The Obsidian plugin lives in `obsidian-plugin/`, **outside the npm
+workspaces** — a root `npm install` does not touch it:
+
+```bash
+cd obsidian-plugin && npm install
+npm run build      # typecheck + bundle main.js (which is committed; CI checks it is current)
+npm test           # frontmatter parsing, including the YAML leading-zero trap
 ```
 
 The smoke test drives the real API over HTTP and takes `BASE` / `ORIGIN`, so it
@@ -106,13 +117,25 @@ shadow, radius or duration, the component is usually wrong.
 
 ---
 
-## Planned work
+## The Obsidian integration
 
-`docs/OBSIDIAN-INTEGRATION.md` — a full concept for an Obsidian plugin that
-turns dated notes into cards, and the Chronoplot work it needs: API tokens,
-a source-owned sync endpoint, and `obsidian://` links back to the note. It is
-written to be picked up cold and ends with open questions and a build order.
-**Read it before starting that feature.** Nothing in it is built yet.
+Built. `docs/OBSIDIAN-INTEGRATION.md` is the design and records which file
+holds which phase; `obsidian-plugin/README.md` covers building and installing.
+Read the design doc before changing any of it. Two invariants:
+
+**A sync owns only what it created.** `server/src/sync-source.ts` matches on
+`source.kind + vault + path`, writes only the fields the payload states, and
+never touches an item without a `source` or from another vault — that is what
+lets a colour or lane chosen in the editor survive a re-sync. It is pure, so
+`server/test/reconcile.test.ts` covers it without a database.
+
+**Bearer auth sets `request.user` but never `request.sessionToken`.** The CSRF
+hook keys off `sessionToken`; setting it would demand a cookie the plugin
+cannot produce. Routes that must not accept a token — anything that mints
+credentials — call `requireSessionUser`.
+
+A stored `source.url` may only be `obsidian://` or `https://`. It ends up in an
+`href` in the editor and in every HTML export, so the schema refuses the rest.
 
 ---
 

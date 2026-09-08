@@ -6,6 +6,9 @@ Create a project, set the range it spans, drag out cards on as many lanes as you
 need, and export a clean vector PDF, a self-contained interactive HTML file, or
 a project file to move it to another instance.
 
+Dated notes in an [Obsidian](obsidian-plugin/README.md) vault can become cards
+too, and each one links back to its note.
+
 ---
 
 ## Quick start
@@ -80,11 +83,14 @@ npx tsx --tsconfig web/tsconfig.json web/test/<suite>.test.ts
 
 Suites: `dates` (calendar maths), `axis` (windowing and zoom), `reorder`
 (lane and group ordering), `packing` (label placement, snapping, link routing),
-`pdf-plan` (pagination and scale), `html-export` (output and escaping).
+`pdf-plan` (pagination and scale), `html-export` (output and escaping). Plus
+`server/test/reconcile.test.ts` for the Obsidian sync reconciler, and
+`npm test` inside `obsidian-plugin/` for its frontmatter parser.
 
 The smoke test drives the real API: registration, login, CSRF and cross-origin
 rejection, sharing, read-only enforcement, version conflicts, project import,
-and the admin surface.
+the admin surface, and API tokens — that one works, a revoked one does not, a
+project-scoped one is refused elsewhere, and none of them can mint credentials.
 
 ---
 
@@ -95,4 +101,5 @@ and the admin surface.
 | [docs/USING.md](docs/USING.md) | Accounts, editing, keyboard, exports, embedding in Obsidian |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Configuration, Docker, Postgres, backups, CI |
 | [docs/DESIGN.md](docs/DESIGN.md) | The design system — type, spacing, motion, themes, palette |
-| [docs/OBSIDIAN-INTEGRATION.md](docs/OBSIDIAN-INTEGRATION.md) | Concept for a planned Obsidian plugin |
+| [obsidian-plugin/README.md](obsidian-plugin/README.md) | Building, installing and configuring the Obsidian plugin |
+| [docs/OBSIDIAN-INTEGRATION.md](docs/OBSIDIAN-INTEGRATION.md) | How that integration is designed, and why |
