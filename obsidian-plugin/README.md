@@ -21,6 +21,13 @@ The build writes `main.js` next to `manifest.json`. Those two files are the
 plugin; `obsidian` and the CodeMirror packages stay external because Obsidian
 provides them at runtime.
 
+`@types/node` and `tsx` look unused here and are not — the test suite uses
+`process.exit` and runs through `tsx`. They have to be declared *in this
+folder*: this tree sits inside the Chronoplot repository, so on a developer
+machine TypeScript finds the root's `node_modules/@types` by walking up the
+directory chain and `npx` finds the root's binaries. CI installs only this
+folder, which is the point, and there both lookups come up empty.
+
 ## Install into a vault
 
 There is no community-plugin listing, so install it by hand:
