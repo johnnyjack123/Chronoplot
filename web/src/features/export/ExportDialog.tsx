@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ThemeName, TimelineDoc } from "@shared";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -13,7 +13,15 @@ import {
   type ExportOptions, type Orientation, type PageSize,
 } from "./pdf-plan";
 
-type Format = "pdf" | "html" | "project";
+type Format = "pdf" | "html" | "png" | "project";
+
+/** PNG multipliers. 1x is the drawing's own units, so 2x is the usable default. */
+const PNG_SCALES = [
+  { value: "1", label: "1x" },
+  { value: "2", label: "2x" },
+  { value: "3", label: "3x" },
+  { value: "4", label: "4x" },
+] as const;
 
 /*
  * Scale presets, in millimetres per day. "Fit" is a null scale, which the
@@ -66,6 +74,8 @@ export function ExportDialog({
   const [theme, setTheme] = useState<ThemeName>("daylight");
   const [repeatLaneLabels, setRepeatLaneLabels] = useState(true);
   const [showToday, setShowToday] = useState(doc.settings.showToday);
+  const [transparent, setTransparent] = useState(false);
+  const [pngScale, setPngScale] = useState("2");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,6 +97,40 @@ export function ExportDialog({
     [customMm, isCustom, orientation, pageSize, repeatLaneLabels, scaleKey, showToday, theme, title, verticalScale],
   );
 
+  /*
+   * The pixel readout, resolved asynchronously.
+   *
+   * Measuring means building the drawing, and that lives in the lazily loaded
+   * export module - importing it statically just to size a hint would undo the
+   * code splitting that keeps the editor's first load small. The flag guards
+   * against a late import landing after the dialog moved on.
+   */
+  const [pngDimensions, setPngDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    if (format !== "png") {
+      setPngDimensions(null);
+      return;
+    }
+    let current = true;
+    void (async () => {
+      try {
+        const { pngSize } = await import("./html-export");
+        const size = pngSize(
+          doc,
+          { title, theme, showLaneLabels: repeatLaneLabels, transparent },
+          Number(pngScale),
+        );
+        if (current) setPngDimensions(size);
+      } catch {
+        if (current) setPngDimensions(null);
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [doc, format, pngScale, repeatLaneLabels, theme, title, transparent]);
+
   // Recomputed on every option change, so the page count is never a surprise.
   const plan = useMemo(() => {
     try {
@@ -104,7 +148,14 @@ export function ExportDialog({
         downloadProjectFile(title, doc, user?.name);
       } else if (format === "html") {
         const { exportHtml } = await import("./html-export");
-        exportHtml(doc, { title, theme, showLaneLabels: repeatLaneLabels });
+        exportHtml(doc, { title, theme, showLaneLabels: repeatLaneLabels, transparent });
+      } else if (format === "png") {
+        const { exportPng } = await import("./html-export");
+        await exportPng(
+          doc,
+          { title, theme, showLaneLabels: repeatLaneLabels, transparent },
+          Number(pngScale),
+        );
       } else {
         // jsPDF is pulled in only now, so opening the editor never pays for it.
         const { exportPdf } = await import("./pdf-render");
@@ -125,7 +176,9 @@ export function ExportDialog({
       ? "Vector output - text stays selectable and nothing pixelates when printed."
       : format === "html"
         ? "A single HTML file with no external dependencies, safe to embed anywhere."
-        : "The timeline itself, to open on another Chronoplot instance.";
+        : format === "png"
+          ? "A flat image of the whole timeline, for slides and chat."
+          : "The timeline itself, to open on another Chronoplot instance.";
 
   return (
     <Dialog
@@ -150,12 +203,45 @@ export function ExportDialog({
               onChange={setFormat}
               options={[
                 { value: "pdf", label: "PDF" },
-                { value: "html", label: "Interactive HTML" },
+                { value: "html", label: "HTML" },
+                { value: "png", label: "Image" },
                 { value: "project", label: "Project file" },
               ]}
             />
           )}
         </Field>
+
+        {format === "png" ? (
+          <Field
+            label="Resolution"
+            hint={
+              pngDimensions
+                ? `${pngDimensions.width} x ${pngDimensions.height} pixels.`
+                : "Larger is sharper, and a long timeline gets big quickly."
+            }
+          >
+            {() => (
+              <Segmented<string>
+                value={pngScale}
+                onChange={setPngScale}
+                options={PNG_SCALES.map((entry) => ({ ...entry }))}
+              />
+            )}
+          </Field>
+        ) : null}
+
+        {format === "html" || format === "png" ? (
+          <Switch
+            checked={transparent}
+            onChange={setTransparent}
+            label="Transparent background"
+            hint={
+              transparent
+                ? "Whatever the file sits on shows through. Pick a theme whose text suits that surface - pale text vanishes on white."
+                : "Painted in the chosen theme's background colour."
+            }
+          />
+        ) : null}
 
         {format === "project" ? (
           <div className="rounded-md border border-line bg-sunken px-3 py-2.5">

@@ -32,6 +32,13 @@ export interface HtmlExportOptions {
   theme: ThemeName;
   /** Draws lane names down the left edge. */
   showLaneLabels: boolean;
+  /**
+   * Leaves the background unpainted, so whatever the file is placed on shows
+   * through. Text and gridlines still come from the chosen theme, so pick one
+   * whose ink suits the surface underneath - a dark theme's pale text is
+   * invisible on white.
+   */
+  transparent?: boolean;
 }
 
 /** Layout constants for the exported drawing, in SVG user units. */
@@ -168,7 +175,15 @@ function renderCards(layout: Layout, palette: ReturnType<typeof readPalette>): s
   return parts.join("");
 }
 
-export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string {
+/**
+ * Both outputs come from here.
+ *
+ * The interactive page and the flat SVG draw exactly the same thing - only the
+ * wrapper differs - so producing them from one pass is what stops a fix landing
+ * in one and not the other. The SVG carries its own `<style>`, because a
+ * rasteriser hands it no page to inherit from.
+ */
+function render(doc: TimelineDoc, options: HtmlExportOptions, mode: "html" | "svg"): string {
   const palette = readPalette(options.theme);
 
   try {
@@ -180,8 +195,23 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
 
     const plotWidth = Math.max(layout.totalWidth, 1);
     const plotHeight = Math.max(layout.totalHeight, 1);
-    const labelWidth = options.showLaneLabels ? laneColumnWidth(doc, LANE_COLUMN) : 0;
-    const totalWidth = labelWidth + plotWidth + PADDING * 2;
+    const laneColumn = options.showLaneLabels ? laneColumnWidth(doc, LANE_COLUMN) : 0;
+
+    /*
+     * A title the packer could place on neither side overhangs the plot, and
+     * sizing the canvas to the plot alone simply cut it off - the longest
+     * labels, the ones most worth reading, were the ones that vanished. The
+     * lane column already provides room on the left, so only what reaches past
+     * it has to be added.
+     */
+    const overhangLeft = Math.max(0, layout.overflow.left - laneColumn);
+    const overhangRight = layout.overflow.right;
+
+    // Everything that positions lane names and the axis rule measures from the
+    // plot's left edge, so this stays the lane column alone; the overhang only
+    // moves the whole drawing and widens the canvas.
+    const labelWidth = laneColumn;
+    const totalWidth = laneColumn + overhangLeft + plotWidth + overhangRight + PADDING * 2;
     const totalHeight = AXIS_HEIGHT + plotHeight + PADDING * 2;
 
     const canvas = palette.token("--canvas", "#0b0f16");
@@ -282,6 +312,59 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
 
     const range = `${formatWithPrecision(doc.settings.start, "day")} – ${formatWithPrecision(doc.settings.end, "day")}`;
 
+    /* The drawing itself, identical in both outputs. */
+    const drawing =
+      `<defs>` +
+      `<marker id="cp-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">` +
+      `<path d="M0 .5 L7.5 4 L0 7.5 z" fill="${inkSubtle}"/>` +
+      `</marker>` +
+      `</defs>` +
+      `<g transform="translate(${PADDING + laneColumn + overhangLeft} ${PADDING})">` +
+      `<g transform="translate(0 ${AXIS_HEIGHT})">${laneWashes}${weekends}${groupRows}${laneRows}</g>` +
+      `${upperTicks}${lowerTicks}` +
+      `<line x1="${-labelWidth}" y1="${AXIS_HEIGHT}" x2="${plotWidth}" y2="${AXIS_HEIGHT}" stroke="${gridMajor}" stroke-width="1.5"/>` +
+      `${laneDivider}` +
+      `<g transform="translate(0 ${AXIS_HEIGHT})">${links}${renderCards(layout, palette)}</g>` +
+      `${todayLine}` +
+      `</g>`;
+
+    /*
+     * Only the classes the drawing actually uses. The page's own chrome - the
+     * stage, the tooltip, the buttons - has no meaning in a flat image.
+     */
+    const drawingCss =
+      `.cp-axis-upper { fill: ${inkMuted}; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }` +
+      `.cp-axis-lower { fill: ${inkSubtle}; font-size: 11px; text-anchor: middle; }` +
+      `.cp-lane { fill: ${ink}; font-size: 12px; }` +
+      `.cp-group { fill: ${inkMuted}; font-size: 10px; font-weight: 600; letter-spacing: .05em; }` +
+      `.cp-inside { font-size: 12px; font-weight: 500; }` +
+      `.cp-outside { fill: ${ink}; font-size: 11px; }`;
+
+    if (mode === "svg") {
+      /*
+       * A system font stack would rasterise differently on every machine, so
+       * the family is named here and the rasteriser is given something it can
+       * resolve. The background rect is omitted entirely when transparent -
+       * painting it in a fully transparent colour would still flatten anything
+       * placed behind it in some viewers.
+       */
+      const background = options.transparent
+        ? ""
+        : `<rect width="${totalWidth}" height="${totalHeight}" fill="${canvas}"/>`;
+
+      return (
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}" ` +
+        `viewBox="0 0 ${totalWidth} ${totalHeight}">` +
+        `<style>` +
+        `text { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }` +
+        drawingCss +
+        `</style>` +
+        background +
+        drawing +
+        `</svg>`
+      );
+    }
+
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -291,8 +374,13 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
 <style>
   :root { color-scheme: ${["daylight", "parchment"].includes(options.theme) ? "light" : "dark"}; }
   * { box-sizing: border-box; }
+  /*
+   * Transparent leaves the page unpainted so the note or site behind it shows
+   * through - which is the point of embedding it in Obsidian rather than
+   * pasting a screenshot.
+   */
   body {
-    margin: 0; background: ${canvas}; color: ${ink};
+    margin: 0; background: ${options.transparent ? "transparent" : canvas}; color: ${ink};
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   .cp-root { position: relative; width: 100%; height: 100vh; overflow: hidden; }
@@ -350,21 +438,7 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
 <body>
 <div class="cp-root">
   <div class="cp-stage" id="cp-stage">
-    <svg class="cp-surface" id="cp-surface" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <marker id="cp-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M0 .5 L7.5 4 L0 7.5 z" fill="${inkSubtle}"/>
-        </marker>
-      </defs>
-      <g transform="translate(${PADDING + labelWidth} ${PADDING})">
-        <g transform="translate(0 ${AXIS_HEIGHT})">${laneWashes}${weekends}${groupRows}${laneRows}</g>
-        ${upperTicks}${lowerTicks}
-        <line x1="${-labelWidth}" y1="${AXIS_HEIGHT}" x2="${plotWidth}" y2="${AXIS_HEIGHT}" stroke="${gridMajor}" stroke-width="1.5"/>
-        ${laneDivider}
-        <g transform="translate(0 ${AXIS_HEIGHT})">${links}${renderCards(layout, palette)}</g>
-        ${todayLine}
-      </g>
-    </svg>
+    <svg class="cp-surface" id="cp-surface" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}" xmlns="http://www.w3.org/2000/svg">${drawing}</svg>
   </div>
 
   <div class="cp-bar">
@@ -507,6 +581,80 @@ export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string 
   } finally {
     palette.dispose();
   }
+}
+
+/** The interactive, self-contained page. */
+export function buildHtml(doc: TimelineDoc, options: HtmlExportOptions): string {
+  return render(doc, options, "html");
+}
+
+/** The same drawing as a flat SVG, carrying its own styles. */
+export function buildSvg(doc: TimelineDoc, options: HtmlExportOptions): string {
+  return render(doc, options, "svg");
+}
+
+/** Pixel dimensions a PNG would have at the given multiplier. */
+export function pngSize(doc: TimelineDoc, options: HtmlExportOptions, scale: number): { width: number; height: number } {
+  const svg = buildSvg(doc, options);
+  const width = Number(/\swidth="(\d+(?:\.\d+)?)"/.exec(svg)?.[1] ?? 0);
+  const height = Number(/\sheight="(\d+(?:\.\d+)?)"/.exec(svg)?.[1] ?? 0);
+  return { width: Math.round(width * scale), height: Math.round(height * scale) };
+}
+
+/**
+ * Rasterises the drawing to a PNG.
+ *
+ * Via an `<img>` and a canvas rather than a library: the SVG is already the
+ * exact thing on screen, so anything that re-draws it is a second renderer to
+ * keep in agreement. The image is loaded from a data URL rather than a blob
+ * URL because a blob URL taints the canvas in some browsers, and a tainted
+ * canvas cannot be read back - the export would fail at the last step.
+ */
+export async function exportPng(
+  doc: TimelineDoc,
+  options: HtmlExportOptions,
+  scale = 2,
+): Promise<void> {
+  const svg = buildSvg(doc, options);
+  const { width, height } = pngSize(doc, options, scale);
+
+  if (width <= 0 || height <= 0) throw new Error("The timeline has no drawable area.");
+  // Browsers refuse canvases beyond roughly this, and fail by returning a blank
+  // image rather than by throwing - so say what happened instead.
+  if (width > 16384 || height > 16384) {
+    throw new Error(
+      `At ${scale}x the image would be ${width}x${height} pixels, which browsers cannot produce. Choose a smaller scale.`,
+    );
+  }
+
+  const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  const image = new Image();
+  image.decoding = "sync";
+
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("The drawing could not be rasterised."));
+    image.src = encoded;
+  });
+
+  const canvasEl = document.createElement("canvas");
+  canvasEl.width = width;
+  canvasEl.height = height;
+  const context = canvasEl.getContext("2d");
+  if (!context) throw new Error("This browser provided no 2D canvas context.");
+
+  // Nothing is painted first, so an omitted background rect stays transparent.
+  context.drawImage(image, 0, 0, width, height);
+
+  const blob = await new Promise<Blob | null>((resolve) => canvasEl.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("The image could not be encoded.");
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${options.title.replace(/[^\w\d\-. ]+/g, "").trim() || "timeline"}.png`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 export function exportHtml(doc: TimelineDoc, options: HtmlExportOptions): void {

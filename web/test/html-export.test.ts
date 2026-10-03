@@ -23,7 +23,7 @@ const stubElement = () => ({
 };
 (globalThis as Record<string, unknown>).getComputedStyle = () => ({ getPropertyValue: () => "" });
 
-const { buildHtml } = await import("../src/features/export/html-export.ts");
+const { buildHtml, buildSvg, pngSize } = await import("../src/features/export/html-export.ts");
 type Doc = Parameters<typeof buildHtml>[0];
 
 let failed = 0;
@@ -196,6 +196,88 @@ check("pan is registered", html.includes('addEventListener("pointerdown"'));
   // Still self-contained: an anchor is followed on click, never fetched to render.
   check("the https link is only an anchor",
     !/(src)\s*=\s*["']https?:/i.test(external) && !/fetch\(|XMLHttpRequest/.test(external));
+}
+
+/* 8. A label the packer could place on neither side must still be drawn. */
+{
+  const widthOfSvg = (svg: string): number =>
+    Number(/<svg[^>]*\swidth="(\d+(?:\.\d+)?)"/.exec(svg)?.[1] ?? 0);
+
+  // One short bar at the very start of a ten-day timeline. A title this long
+  // fits neither inside the bar nor to its left (there is nothing to the left),
+  // so it goes right and runs off the end.
+  const overhanging = (title: string): Doc => ({
+    ...doc,
+    settings: { ...doc.settings, start: "2026-01-01", end: "2026-01-10" },
+    groups: [],
+    links: [],
+    rows: [{ id: "r1", groupId: null, title: "Lane" }],
+    items: [
+      { id: "i1", rowId: "r1", kind: "bar", title,
+        color: 1, start: "2026-01-01", end: "2026-01-02", precision: "day" },
+    ],
+  });
+
+  const short = buildSvg(overhanging("Short"), { title: "T", theme: "midnight", showLaneLabels: true });
+  const long = buildSvg(overhanging("L".repeat(250)), { title: "T", theme: "midnight", showLaneLabels: true });
+
+  check("a label running past the plot widens the canvas",
+    widthOfSvg(long) > widthOfSvg(short), `${widthOfSvg(short)} -> ${widthOfSvg(long)}`);
+  check("the overhanging label is in the output", long.includes("L".repeat(250)));
+
+  // The drawing is shifted right by exactly the left overhang, so a label
+  // reaching before the plot's zero is not clipped either.
+  const leftOverhang = buildSvg(
+    {
+      ...doc,
+      settings: { ...doc.settings, start: "2026-01-01", end: "2026-01-10" },
+      groups: [], links: [],
+      rows: [{ id: "r1", groupId: null, title: "Lane" }],
+      items: [
+        { id: "a", rowId: "r1", kind: "bar", title: "A".repeat(60),
+          color: 1, start: "2026-01-08", end: "2026-01-09", precision: "day" },
+      ],
+    },
+    { title: "T", theme: "midnight", showLaneLabels: true },
+  );
+  check("a left-hand label is kept inside the canvas", leftOverhang.includes("A".repeat(60)));
+}
+
+/* 9. Flat SVG and PNG sizing. */
+{
+  const opts = { title: "T", theme: "midnight" as const, showLaneLabels: true };
+
+  const svg = buildSvg(doc, opts);
+  check("buildSvg returns a standalone svg", svg.startsWith("<svg xmlns="));
+  check("it carries its own styles", svg.includes("<style>") && svg.includes(".cp-outside"));
+  check("it names a font, so rasterising is predictable", svg.includes("font-family"));
+  check("it has no page chrome", !svg.includes("cp-stage") && !svg.includes("<script"));
+  check("user text is still escaped", !svg.includes(`<script>alert("xss")</script>`));
+
+  const opaque = buildSvg(doc, opts);
+  const clear = buildSvg(doc, { ...opts, transparent: true });
+  check("an opaque svg paints a background", /<rect width="\d+(\.\d+)?" height="\d+(\.\d+)?" fill=/.test(opaque));
+  check("a transparent svg paints none",
+    !/<rect width="\d+(\.\d+)?" height="\d+(\.\d+)?" fill=/.test(clear));
+  check("transparency does not change the size",
+    /width="(\d+(?:\.\d+)?)"/.exec(opaque)?.[1] === /width="(\d+(?:\.\d+)?)"/.exec(clear)?.[1]);
+
+  const at1 = pngSize(doc, opts, 1);
+  const at3 = pngSize(doc, opts, 3);
+  check("png size scales with the multiplier",
+    at3.width === at1.width * 3 && at3.height === at1.height * 3,
+    `${at1.width}x${at1.height} -> ${at3.width}x${at3.height}`);
+  check("png size is a whole number of pixels",
+    Number.isInteger(at3.width) && Number.isInteger(at3.height));
+}
+
+/* 10. The interactive page honours transparency too. */
+{
+  const clear = buildHtml(doc, { title: "T", theme: "midnight", showLaneLabels: true, transparent: true });
+  check("a transparent page leaves the body unpainted", /body\s*\{[^}]*background:\s*transparent/.test(clear));
+  const opaque = buildHtml(doc, { title: "T", theme: "midnight", showLaneLabels: true });
+  check("an opaque page still paints it", !/body\s*\{[^}]*background:\s*transparent/.test(opaque));
+  check("the page keeps its interactivity either way", clear.includes('addEventListener("wheel"'));
 }
 
 console.log(failed === 0 ? "\nAll HTML export checks passed" : `\n${failed} check(s) failed`);
