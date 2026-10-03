@@ -15,7 +15,7 @@ import { LinkLayer, PendingLink } from "./Links";
 import { TimelineCard, describeRange, type DragMode } from "./TimelineCard";
 import {
   buildAxis, clampToWindow, clampZoom, collectSnapTargets, dateAtX, fitUnitsPerDay, laneAtY,
-  layout as computeLayout, snapDrag, snapOffsetDays, xOf,
+  layout as computeLayout, snapDrag, snapOffsetDays, subLaneAt, xOf,
   DEFAULT_LAYOUT, SIDEBAR_WIDTH, type PlacedItem,
 } from "./geometry";
 
@@ -37,6 +37,8 @@ type DragState =
       originStart: string;
       originEnd: string;
       originRowId: string;
+      /** Sub-lane the card was drawn on when the drag began. */
+      originStack: number;
       /** Date the drag latched onto, shown as a guide line while it holds. */
       snappedTo: string | null;
     }
@@ -167,6 +169,7 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
         originStart: placed.item.start,
         originEnd: placed.item.end,
         originRowId: placed.item.rowId,
+        originStack: placed.stack,
         snappedTo: null,
       });
     },
@@ -263,6 +266,18 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           { start: bounded.start, end: bounded.end, rowId },
           `move:${drag.itemId}`,
         );
+
+        /*
+         * Aiming at a sub-lane pins the card there. Only when the aim actually
+         * changed, so a purely sideways drag leaves an unpinned card unpinned
+         * and it keeps arranging itself - pinning on every move would quietly
+         * freeze a whole timeline the first time each card was nudged.
+         */
+        if (lane) {
+          const target = subLaneAt(lane, point.y, layout.options);
+          const changed = rowId !== drag.originRowId || target !== drag.originStack;
+          if (changed) commands.setSubLane(drag.itemId, target, `move:${drag.itemId}`);
+        }
         return;
       }
 

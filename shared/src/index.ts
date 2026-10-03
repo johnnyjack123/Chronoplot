@@ -94,6 +94,16 @@ export const rowSchema = z.object({
    * defaulted so documents written before lanes could be coloured stay valid.
    */
   color: z.number().int().min(0).max(8).optional(),
+  /**
+   * How many sub-lanes this lane keeps, whether or not anything sits on them.
+   *
+   * The packer has always opened a sub-line when two cards overlapped, but that
+   * was derived: remove the card and the sub-line vanished. This is the lane's
+   * own shape - a deliberately empty row you can drop a card onto. Absent means
+   * "however many the packer needs", which is what every existing document
+   * means.
+   */
+  subLanes: z.number().int().min(1).max(50).optional(),
 });
 export type Row = z.infer<typeof rowSchema>;
 
@@ -144,6 +154,16 @@ export const itemSchema = z.object({
   precision: precisionSchema,
   /** Optional completion, drawn as a darker inset fill. */
   progress: z.number().min(0).max(1).optional(),
+  /**
+   * Which sub-lane of its lane this card sits on, 0-based.
+   *
+   * Absent means "wherever it fits", which is how every card behaved before and
+   * how a freshly drawn one still behaves. Setting it pins the card: the packer
+   * puts it exactly there and arranges the unpinned ones around it. That is the
+   * whole difference between a sub-line that appears because two dates clashed
+   * and a sub-lane you decided on.
+   */
+  subLane: z.number().int().min(0).max(49).optional(),
   /** Set only on items maintained by an external source. See above. */
   source: itemSourceSchema.optional(),
 });

@@ -367,8 +367,10 @@ export interface PlacedItem {
   width: number;
   y: number;
   height: number;
-  /** Which sub-line inside the lane this item was packed onto. */
+  /** Which sub-lane inside the lane this item sits on. */
   stack: number;
+  /** True when `item.subLane` put it there, rather than the packer. */
+  pinned: boolean;
   /** Decided by the packer, so screen and PDF agree on where the title goes. */
   labelSide: LabelSide;
   /** Estimated width of the title when drawn outside the bar. */
@@ -383,6 +385,8 @@ export interface PlacedLane {
   color: number | undefined;
   y: number;
   height: number;
+  /** How many sub-lanes this lane is drawn with, at least one. */
+  subLanes: number;
   items: PlacedItem[];
 }
 
@@ -450,6 +454,8 @@ interface Packed {
   stack: number;
   labelSide: LabelSide;
   labelWidth: number;
+  /** True when the card names its own sub-lane rather than being arranged. */
+  pinned: boolean;
 }
 
 /**
@@ -473,11 +479,28 @@ function packLane(
 ): Map<string, Packed> {
   const { unitsPerDay, labelGap, minItemGap, labelInset, labelCharWidth, cardHeight } = options;
 
-  /** Rightmost point claimed on each sub-line so far. */
-  const claimed: number[] = [];
+  /*
+   * Claimed spans per sub-line.
+   *
+   * A single rightmost value was enough while every card was placed in start
+   * order, but a pinned card can sit anywhere - including to the left of one
+   * already placed - so each line has to remember its actual gaps. Free space
+   * between two pinned cards is usable space, and collapsing a line to "how far
+   * it reaches" would throw it away.
+   */
+  const claimed: { from: number; to: number }[][] = [];
   const result = new Map<string, Packed>();
 
-  items.forEach((item, index) => {
+  const lineOf = (index: number): { from: number; to: number }[] => {
+    while (claimed.length <= index) claimed.push([]);
+    return claimed[index]!;
+  };
+
+  const fits = (line: number, from: number, to: number): boolean =>
+    lineOf(line).every((span) => to + minItemGap <= span.from || from >= span.to + minItemGap);
+
+  /** Geometry of one card, independent of where it ends up vertically. */
+  const measure = (item: Item, index: number, source: Item[]) => {
     const x = xOf(item.start, timelineStart, unitsPerDay);
     // A milestone is a point in the model but a diamond on screen, so it claims
     // the diamond's width - otherwise two milestones a day apart overlap at any
@@ -496,22 +519,17 @@ function packLane(
       // No room on the right if the label would run off the end of the plot...
       const overflowsEnd = x + barWidth + labelWidth > timelineWidth;
       // ...or if the next item would sit underneath it.
-      const next = items[index + 1];
+      const next = source[index + 1];
       const collidesWithNext =
         next !== undefined &&
         xOf(next.start, timelineStart, unitsPerDay) < x + barWidth + labelWidth + minItemGap;
       preferLeft = overflowsEnd || collidesWithNext;
     }
 
-    const place = (line: number, side: LabelSide): boolean => {
-      const leftEdge = side === "left" ? x - labelWidth : x;
-      const rightEdge = side === "right" ? x + barWidth + labelWidth : x + barWidth;
-      const free = leftEdge >= (claimed[line] ?? -Infinity) + minItemGap;
-      if (!free) return false;
-      claimed[line] = rightEdge;
-      result.set(item.id, { stack: line, labelSide: side, labelWidth });
-      return true;
-    };
+    const span = (side: LabelSide): { from: number; to: number } => ({
+      from: side === "left" ? x - labelWidth : x,
+      to: side === "right" ? x + barWidth + labelWidth : x + barWidth,
+    });
 
     const sides: LabelSide[] = fitsInside
       ? ["inside"]
@@ -519,15 +537,50 @@ function packLane(
         ? ["left", "right"]
         : ["right", "left"];
 
+    return { x, labelWidth, fitsInside, preferLeft, sides, span };
+  };
+
+  const commit = (item: Item, line: number, side: LabelSide, extent: { from: number; to: number }, labelWidth: number): void => {
+    lineOf(line).push(extent);
+    result.set(item.id, { stack: line, labelSide: side, labelWidth, pinned: item.subLane !== undefined });
+  };
+
+  /*
+   * Pinned cards go down first and keep their sub-lane whatever it costs. If
+   * two of them were put on the same line at the same time they will overlap -
+   * which is the honest outcome: the alternative is silently moving a card the
+   * user deliberately placed, and then it is no longer a pin.
+   */
+  for (const item of items) {
+    if (item.subLane === undefined) continue;
+    const m = measure(item, items.indexOf(item), items);
+    const side = m.sides.find((candidate) => fits(item.subLane!, m.span(candidate).from, m.span(candidate).to))
+      ?? m.sides[0]!;
+    commit(item, item.subLane, side, m.span(side), m.labelWidth);
+  }
+
+  /* Everything else fills the gaps around them, in start order as before. */
+  const loose = items.filter((item) => item.subLane === undefined);
+  loose.forEach((item, index) => {
+    const m = measure(item, index, loose);
+
     for (let line = 0; line < claimed.length; line++) {
-      if (sides.some((side) => place(line, side))) return;
+      const side = m.sides.find((candidate) => fits(line, m.span(candidate).from, m.span(candidate).to));
+      if (side) {
+        commit(item, line, side, m.span(side), m.labelWidth);
+        return;
+      }
     }
 
     // Nothing fitted, so open a new sub-line. A left label there would hang
     // over empty space to the left, which reads worse than one on the right.
     const line = claimed.length;
-    claimed.push(-Infinity);
-    place(line, fitsInside ? "inside" : preferLeft && x - labelWidth >= 0 ? "left" : "right");
+    const side: LabelSide = m.fitsInside
+      ? "inside"
+      : m.preferLeft && m.x - m.labelWidth >= 0
+        ? "left"
+        : "right";
+    commit(item, line, side, m.span(side), m.labelWidth);
   });
 
   return result;
@@ -563,10 +616,18 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
     title: string;
     groupId: string | null;
     color?: number;
+    subLanes?: number;
   }): void => {
     const items = itemsByRow.get(row.id) ?? [];
     const packed = packLane(items, options, timelineStart, plotWidth);
-    const stackCount = Math.max(1, ...[...packed.values()].map((entry) => entry.stack + 1));
+    // The lane is as tall as whichever is greater: what the cards need, or what
+    // the lane was told to keep. The second is what lets an empty sub-lane
+    // exist to drop a card onto.
+    const stackCount = Math.max(
+      1,
+      row.subLanes ?? 1,
+      ...[...packed.values()].map((entry) => entry.stack + 1),
+    );
     const height = lanePadding * 2 + stackCount * cardHeight + (stackCount - 1) * cardGap;
 
     lanes.push({
@@ -576,8 +637,11 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
       color: row.color,
       y,
       height,
+      subLanes: stackCount,
       items: items.map((item) => {
-        const entry = packed.get(item.id) ?? { stack: 0, labelSide: "inside" as const, labelWidth: 0 };
+        const entry =
+          packed.get(item.id) ??
+          { stack: 0, labelSide: "inside" as const, labelWidth: 0, pinned: false };
         return {
           item,
           x: xOf(item.start, timelineStart, unitsPerDay),
@@ -585,6 +649,7 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
           y: y + lanePadding + entry.stack * (cardHeight + cardGap),
           height: cardHeight,
           stack: entry.stack,
+          pinned: entry.pinned,
           labelSide: entry.labelSide,
           labelWidth: entry.labelWidth,
         };
@@ -640,6 +705,25 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
     overflow: { left: overflowLeft, right: overflowRight },
     options,
   };
+}
+
+/**
+ * Which sub-lane a y position inside a lane falls on.
+ *
+ * Clamped to the lane's own sub-lanes rather than allowed past the end: a drag
+ * that overshoots should land on the last one, not create sub-lane 97 and a
+ * lane tall enough to scroll through.
+ */
+export function subLaneAt(lane: PlacedLane, y: number, options: LayoutOptions): number {
+  const { lanePadding, cardHeight, cardGap } = options;
+  const offset = y - (lane.y + lanePadding);
+  const index = Math.floor(offset / (cardHeight + cardGap));
+  return Math.max(0, Math.min(lane.subLanes - 1, index));
+}
+
+/** Top edge of a sub-lane, in the same space as `PlacedItem.y`. */
+export function subLaneTop(lane: PlacedLane, index: number, options: LayoutOptions): number {
+  return lane.y + options.lanePadding + index * (options.cardHeight + options.cardGap);
 }
 
 export interface LaneColumnOptions {

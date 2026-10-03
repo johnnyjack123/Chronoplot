@@ -9,7 +9,7 @@ import { Field, Input, Textarea } from "@/components/ui/Field";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Segmented, Select, Switch } from "@/components/ui/Controls";
 import { Tooltip } from "@/components/ui/Popover";
-import { CopyIcon, LinkIcon, TrashIcon, XIcon } from "@/components/icons";
+import { CopyIcon, LinkIcon, PlusIcon, TrashIcon, XIcon } from "@/components/icons";
 import { CARD_SLOTS, SLOT_NAMES, cardFill } from "@/features/timeline/colors";
 
 /*
@@ -113,6 +113,20 @@ function ItemInspector({
   const links = doc.links.filter((link) => link.fromId === itemId || link.toId === itemId);
   const disabled = readOnly;
 
+  /*
+   * One past the lane's current sub-lanes, so the list can move a card down to
+   * a new one. The lane grows to match when that choice is taken, which is the
+   * same thing dragging past the last sub-lane does.
+   */
+  const row = doc.rows.find((candidate) => candidate.id === item.rowId);
+  const subLaneChoices =
+    Math.max(
+      row?.subLanes ?? 1,
+      doc.items
+        .filter((candidate) => candidate.rowId === item.rowId)
+        .reduce((most, candidate) => Math.max(most, (candidate.subLane ?? 0) + 1), 1),
+    ) + 1;
+
   return (
     <>
       <PanelSection title="Details">
@@ -142,6 +156,32 @@ function ItemInspector({
             />
           )}
         </Field>
+      </PanelSection>
+
+      <PanelSection title="Sub-lane">
+        <Field label="Sub-lane" hideLabel>
+          {(props) => (
+            <Select
+              {...props}
+              value={item.subLane === undefined ? "auto" : String(item.subLane)}
+              onChange={(value) =>
+                commands.setSubLane(itemId, value === "auto" ? null : Number(value))
+              }
+              options={[
+                { value: "auto", label: "Automatic" },
+                ...Array.from({ length: subLaneChoices }, (_, index) => ({
+                  value: String(index),
+                  label: `Sub-lane ${index + 1}`,
+                })),
+              ]}
+            />
+          )}
+        </Field>
+        <p className="text-caption text-ink-subtle">
+          {item.subLane === undefined
+            ? "Arranged automatically - it drops to a new sub-lane only when it would overlap something."
+            : "Pinned. It stays on this sub-lane and the automatic cards arrange themselves around it."}
+        </p>
       </PanelSection>
 
       {item.source ? (
@@ -370,7 +410,19 @@ function RowInspector({
   const select = useEditorStore((state) => state.select);
   if (!row) return null;
 
-  const itemCount = doc.items.filter((item) => item.rowId === rowId).length;
+  const laneItems = doc.items.filter((item) => item.rowId === rowId);
+  const itemCount = laneItems.length;
+
+  /*
+   * What the lane keeps, which is also the highest sub-lane anything is pinned
+   * to. Deliberately not the number on screen: the packer may have opened more
+   * because two cards clashed, and those are not this lane's to remove. Saying
+   * so needs the layout, which the inspector has no business computing.
+   */
+  const subLaneCount = Math.max(
+    row.subLanes ?? 1,
+    laneItems.reduce((most, item) => Math.max(most, (item.subLane ?? 0) + 1), 1),
+  );
 
   return (
     <>
@@ -402,6 +454,27 @@ function RowInspector({
 
         <p className="text-caption text-ink-subtle">
           {itemCount} card{itemCount === 1 ? "" : "s"} on this lane.
+        </p>
+      </PanelSection>
+
+      <PanelSection title="Sub-lanes">
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            disabled={readOnly || subLaneCount <= 1}
+            onClick={() => commands.removeSubLane(rowId)}
+          >
+            Remove
+          </Button>
+          <span className="tabular min-w-8 text-center text-body text-ink">{subLaneCount}</span>
+          <Button size="sm" icon={<PlusIcon />} disabled={readOnly} onClick={() => commands.addSubLane(rowId)}>
+            Add
+          </Button>
+        </div>
+        <p className="text-caption text-ink-subtle">
+          {subLaneCount > 1
+            ? "Drag a card up or down inside the lane to pin it to one. Removing the last sub-lane lets the cards on it arrange themselves again."
+            : "A lane splits on its own when two cards overlap. Add one to make a row you can drop cards onto deliberately."}
         </p>
       </PanelSection>
 

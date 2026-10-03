@@ -297,6 +297,83 @@ export const commands = {
     return id;
   },
 
+  /*
+   * Sub-lanes are a property of the lane, not a side effect of its contents.
+   *
+   * The packer has always opened a sub-line when cards clashed, but that was
+   * derived - move the card away and the sub-line went with it. Keeping a count
+   * on the row is what makes an empty one a place you can aim at.
+   */
+  addSubLane(rowId: string): void {
+    useEditorStore.getState().mutate((draft) => {
+      const row = draft.rows.find((candidate) => candidate.id === rowId);
+      if (!row) return;
+      // Count from what is drawn, not from the stored number: a lane the packer
+      // already split needs the new sub-lane *below* those, or pressing the
+      // button appears to do nothing.
+      const used = draft.items
+        .filter((item) => item.rowId === rowId)
+        .reduce((most, item) => Math.max(most, (item.subLane ?? 0) + 1), 1);
+      row.subLanes = Math.min(50, Math.max(row.subLanes ?? 1, used) + 1);
+    });
+  },
+
+  /**
+   * Drops the last sub-lane, and with it the pins of anything standing on it -
+   * those cards go back to being arranged rather than being deleted.
+   */
+  removeSubLane(rowId: string): void {
+    useEditorStore.getState().mutate((draft) => {
+      const row = draft.rows.find((candidate) => candidate.id === rowId);
+      if (!row) return;
+
+      // The effective count, not the stored one: a lane can have sub-lanes
+      // purely because cards were pinned to them, with nothing on the row.
+      // Reading `subLanes` alone there would make Remove do nothing at all.
+      const effective = Math.max(
+        row.subLanes ?? 1,
+        draft.items
+          .filter((item) => item.rowId === rowId)
+          .reduce((most, item) => Math.max(most, (item.subLane ?? 0) + 1), 1),
+      );
+      if (effective <= 1) return;
+
+      const doomed = effective - 1;
+      for (const item of draft.items) {
+        if (item.rowId === rowId && item.subLane !== undefined && item.subLane >= doomed) {
+          delete item.subLane;
+        }
+      }
+      if (doomed <= 1) delete row.subLanes;
+      else row.subLanes = doomed;
+    });
+  },
+
+  /**
+   * Pins a card to a sub-lane, or lets it be arranged again when given null.
+   *
+   * Setting one past what the lane keeps grows the lane, so dropping a card
+   * below the last sub-lane creates the one it was dropped on - which is how
+   * someone discovers the feature without being told about it.
+   */
+  setSubLane(itemId: string, subLane: number | null, coalesceKey?: string): void {
+    useEditorStore.getState().mutate((draft) => {
+      const item = draft.items.find((candidate) => candidate.id === itemId);
+      if (!item) return;
+
+      if (subLane === null) {
+        delete item.subLane;
+        return;
+      }
+
+      const index = Math.max(0, Math.min(49, Math.round(subLane)));
+      item.subLane = index;
+
+      const row = draft.rows.find((candidate) => candidate.id === item.rowId);
+      if (row && index + 1 > (row.subLanes ?? 1)) row.subLanes = index + 1;
+    }, coalesceKey ? { coalesceKey } : undefined);
+  },
+
   renameRow(rowId: string, title: string): void {
     useEditorStore.getState().mutate((draft) => {
       const row = draft.rows.find((candidate) => candidate.id === rowId);

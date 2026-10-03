@@ -37,6 +37,7 @@ function makeDoc(items: Partial<Item>[], settings: Partial<TimelineDoc["settings
       end: item.end ?? "2026-01-31",
       precision: "day",
       ...(item.progress !== undefined ? { progress: item.progress } : {}),
+      ...(item.subLane !== undefined ? { subLane: item.subLane } : {}),
     })),
     links: [],
   };
@@ -157,6 +158,86 @@ const place = (doc: TimelineDoc, unitsPerDay = 3) =>
 
   check("a single point is harmless", roundedPath([{ x: 3, y: 4 }]) === "M 3 4");
   check("an empty route is harmless", roundedPath([]) === "");
+}
+
+/* ------------------------------------------------------------- sub-lanes -- */
+
+const byId = (lane: ReturnType<typeof place>, id: string) =>
+  lane.items.find((placed) => placed.item.id === id)!;
+
+/* A pinned card goes exactly where it says, even with the lane empty. */
+{
+  const lane = place(makeDoc([{ id: "a", start: "2026-02-01", end: "2026-02-20", subLane: 2 }]));
+  check("a pinned card takes its sub-lane", byId(lane, "a").stack === 2, String(byId(lane, "a").stack));
+  check("it is marked as pinned", byId(lane, "a").pinned);
+  check("the lane grows to hold it", lane.subLanes >= 3, String(lane.subLanes));
+  check("a pinned card sits lower than sub-lane 0", byId(lane, "a").y > lane.y);
+}
+
+/* An unpinned card keeps arranging itself, and does so around the pinned one. */
+{
+  const lane = place(
+    makeDoc([
+      // Same dates, so they would collide if both were free to choose.
+      { id: "pinned", start: "2026-03-01", end: "2026-05-31", subLane: 0 },
+      { id: "loose", start: "2026-03-01", end: "2026-05-31" },
+    ]),
+  );
+  check("the pinned card held sub-lane 0", byId(lane, "pinned").stack === 0);
+  check("the loose card moved out of its way", byId(lane, "loose").stack !== 0,
+    String(byId(lane, "loose").stack));
+  check("the loose card is not marked pinned", !byId(lane, "loose").pinned);
+}
+
+/* Free space between pinned cards is usable, which a single rightmost mark
+   could not express. */
+{
+  const lane = place(
+    makeDoc([
+      { id: "early", start: "2026-01-01", end: "2026-01-20", subLane: 0 },
+      { id: "late", start: "2026-11-01", end: "2026-11-20", subLane: 0 },
+      // Fits comfortably in the gap between them.
+      { id: "middle", title: "M", start: "2026-05-01", end: "2026-05-20" },
+    ]),
+  );
+  check("a loose card uses the gap between two pinned ones",
+    byId(lane, "middle").stack === 0, String(byId(lane, "middle").stack));
+}
+
+/* Pinning two overlapping cards to one sub-lane is honoured rather than
+   silently undone - the alternative is moving a card the user placed. */
+{
+  const lane = place(
+    makeDoc([
+      { id: "x", start: "2026-03-01", end: "2026-06-30", subLane: 1 },
+      { id: "y", start: "2026-04-01", end: "2026-07-31", subLane: 1 },
+    ]),
+  );
+  check("both pins are respected",
+    byId(lane, "x").stack === 1 && byId(lane, "y").stack === 1);
+}
+
+/* A lane can keep an empty sub-lane, which is what makes it a drop target. */
+{
+  const doc = makeDoc([{ id: "a", start: "2026-02-01", end: "2026-02-20" }]);
+  doc.rows[0]!.subLanes = 3;
+  const lane = place(doc);
+  check("an empty sub-lane is kept", lane.subLanes === 3, String(lane.subLanes));
+  check("the lane is tall enough for it",
+    lane.height > DEFAULT_LAYOUT.lanePadding * 2 + DEFAULT_LAYOUT.cardHeight * 2);
+  check("the card itself still packs to the top", byId(lane, "a").stack === 0);
+}
+
+/* Documents written before sub-lanes existed behave exactly as they did. */
+{
+  const lane = place(
+    makeDoc([
+      { id: "a", title: "A long enough title to be pushed outside", start: "2026-02-01", end: "2026-02-05" },
+      { id: "b", title: "Another long title that cannot share the line", start: "2026-02-06", end: "2026-02-10" },
+    ]),
+  );
+  check("nothing is pinned by default", lane.items.every((placed) => !placed.pinned));
+  check("overlapping labels still split onto sub-lanes", lane.subLanes > 1, String(lane.subLanes));
 }
 
 console.log(failed === 0 ? "\nAll packing checks passed" : `\n${failed} check(s) failed`);
