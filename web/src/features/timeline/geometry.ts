@@ -401,7 +401,36 @@ export interface Layout {
   groups: PlacedGroup[];
   totalHeight: number;
   totalWidth: number;
+  /**
+   * How far drawn content reaches past the plot, in layout units.
+   *
+   * A label that fits on neither side still has to go somewhere, so the packer
+   * puts it where it overhangs. Both are >= 0; `right` is the amount beyond
+   * `totalWidth`, `left` the amount before zero. Renderers that size their own
+   * canvas have to add these or the text is simply cut off - which is what the
+   * PDF and HTML exports used to do, silently losing the longest titles.
+   */
+  overflow: { left: number; right: number };
   options: LayoutOptions;
+}
+
+/**
+ * Horizontal extent an item actually occupies once its label is drawn.
+ *
+ * A milestone's `width` is zero in the model - it is a point in time - but it
+ * is a diamond on screen, so the drawn shape has to be measured, not the span.
+ */
+export function drawnExtent(placed: PlacedItem, cardHeight: number): { left: number; right: number } {
+  const shapeWidth =
+    placed.item.kind === "milestone" ? cardHeight * 0.62 : Math.max(placed.width, 2);
+
+  if (placed.labelSide === "left") {
+    return { left: placed.x - placed.labelWidth, right: placed.x + shapeWidth };
+  }
+  if (placed.labelSide === "right") {
+    return { left: placed.x, right: placed.x + shapeWidth + placed.labelWidth };
+  }
+  return { left: placed.x, right: placed.x + shapeWidth };
 }
 
 /**
@@ -589,11 +618,26 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
     y += groupGap;
   }
 
+  const width = totalWidth(doc, unitsPerDay);
+
+  // Measured after placement rather than predicted during it: the packer may
+  // settle for an overhanging side when neither fits, and only the result knows.
+  let overflowLeft = 0;
+  let overflowRight = 0;
+  for (const lane of lanes) {
+    for (const placed of lane.items) {
+      const extent = drawnExtent(placed, cardHeight);
+      if (extent.left < 0) overflowLeft = Math.max(overflowLeft, -extent.left);
+      if (extent.right > width) overflowRight = Math.max(overflowRight, extent.right - width);
+    }
+  }
+
   return {
     lanes,
     groups,
     totalHeight: Math.max(0, y),
-    totalWidth: totalWidth(doc, unitsPerDay),
+    totalWidth: width,
+    overflow: { left: overflowLeft, right: overflowRight },
     options,
   };
 }

@@ -160,12 +160,23 @@ export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
   const columns: PagePlan["columns"] = [];
   const boundaries = [...axis.majorLines, ...axis.lower.map((tick) => tick.x)].sort((a, b) => a - b);
 
-  let cursor = 0;
+  /*
+   * Paginate across what is drawn, not across the plot.
+   *
+   * A title the packer could place on neither side overhangs the plot, and
+   * slicing from 0 to totalWidth cut exactly those labels off the last page.
+   * The lane column already reserves room on the left, so only an overhang
+   * reaching past it moves the start.
+   */
+  const contentLeft = -Math.max(0, built.overflow.left - labelWidth);
+  const contentRight = built.totalWidth + built.overflow.right;
+
+  let cursor = contentLeft;
   let guard = 0;
-  while (cursor < built.totalWidth - 0.01 && guard++ < 2000) {
+  while (cursor < contentRight - 0.01 && guard++ < 2000) {
     const hardEnd = cursor + availableWidth;
-    if (hardEnd >= built.totalWidth) {
-      columns.push({ startX: cursor, endX: built.totalWidth });
+    if (hardEnd >= contentRight) {
+      columns.push({ startX: cursor, endX: contentRight });
       break;
     }
     const snapped = boundaries
@@ -175,7 +186,7 @@ export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
     columns.push({ startX: cursor, endX: end });
     cursor = end;
   }
-  if (columns.length === 0) columns.push({ startX: 0, endX: Math.max(built.totalWidth, 1) });
+  if (columns.length === 0) columns.push({ startX: contentLeft, endX: Math.max(contentRight, 1) });
 
   /* ------------------------------------------------------ vertical slices -- */
   const rows: PagePlan["rows"] = [];
