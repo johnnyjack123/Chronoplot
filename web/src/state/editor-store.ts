@@ -28,6 +28,28 @@ interface HistoryEntry {
   at: number;
 }
 
+/**
+ * The precision a document is mostly built in, used to seed `lastPrecision`.
+ *
+ * The commonest one rather than the newest: a year-based timeline with one
+ * day-precision milestone in it is still a year-based timeline, and opening it
+ * should not hand back days because of that single card.
+ */
+function dominantPrecision(doc: TimelineDoc): Precision {
+  const tally = new Map<Precision, number>();
+  for (const item of doc.items) tally.set(item.precision, (tally.get(item.precision) ?? 0) + 1);
+
+  let best: Precision = "day";
+  let bestCount = 0;
+  for (const [precision, count] of tally) {
+    if (count > bestCount) {
+      best = precision;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 export type Selection =
   | { kind: "none" }
   | { kind: "item"; id: string }
@@ -146,6 +168,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       selection: { kind: "none" },
       linkingFrom: null,
       editingId: null,
+      // Read back out of the document rather than kept across sessions: a
+      // timeline built in years should still hand you years tomorrow, and the
+      // project itself already says which it is.
+      lastPrecision: dominantPrecision(doc),
     }),
 
   reset: () =>

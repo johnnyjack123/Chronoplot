@@ -310,13 +310,17 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
         // That is a real shortcut rather than a guess: dragging out a zero-width
         // bar is meaningless, and a point in time is exactly a milestone.
         const isPoint = daysBetween(start, end) === 0;
+        /*
+         * No precision here on purpose: addItem falls back to the one last
+         * worked in, and naming "day" was what defeated that. Someone building
+         * a timeline in years had every card they dragged come back as days.
+         */
         const id = commands.addItem({
           rowId: drag.rowId,
           kind: isPoint ? "milestone" : "bar",
           title: isPoint ? "Milestone" : "New card",
           start,
           end: isPoint ? start : end,
-          precision: "day",
         });
         select({ kind: "item", id });
       }
