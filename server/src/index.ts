@@ -151,3 +151,17 @@ await app.listen({ port: config.port, host: "0.0.0.0" });
 app.log.info(
   `Chronoplot API on http://localhost:${config.port} (${config.db.driver}, ${config.nodeEnv})`,
 );
+app.log.info(`Sign-in cookies: ${config.cookiesSecure ? "Secure (https)" : "not Secure (http)"}`);
+
+/*
+ * Said plainly because the alternative is worse. Without TLS the session cookie
+ * crosses the network in clear, and anyone on the path can read it and become
+ * that user. Marking the cookie Secure anyway would not fix that - it would
+ * only stop the browser storing it at all, which is the bug this replaced.
+ */
+if (config.isProduction && !config.cookiesSecure) {
+  app.log.warn(
+    `APP_ORIGIN is ${config.appOrigin}, so sessions are sent without TLS. ` +
+      `Fine on a trusted network; put HTTPS in front of this before exposing it.`,
+  );
+}

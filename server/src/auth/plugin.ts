@@ -32,7 +32,9 @@ function cookieOptions() {
   return {
     path: "/",
     sameSite: "lax" as const,
-    secure: config.isProduction,
+    // Follows APP_ORIGIN's scheme, not the build mode - see config.cookiesSecure
+    // for the failure this caused.
+    secure: config.cookiesSecure,
   };
 }
 

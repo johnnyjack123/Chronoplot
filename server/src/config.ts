@@ -69,11 +69,32 @@ if (isProduction && sessionSecret.length < 32) {
   throw new Error("SESSION_SECRET must be at least 32 characters in production.");
 }
 
+const appOrigin = required("APP_ORIGIN", "http://localhost:5173");
+
+/*
+ * Whether the auth cookies carry the Secure flag.
+ *
+ * Tied to the scheme APP_ORIGIN names, not to NODE_ENV - which is what this
+ * used to be, and it cost a day. A browser refuses to *store* a Secure cookie
+ * that arrived over plain HTTP, with localhost the one exception every browser
+ * makes. So a production instance reached at http://<lan-address> looked like
+ * it worked: the login returned 200 and the user, the browser silently dropped
+ * both cookies, and every request after that was unauthenticated again. The
+ * symptom appeared nowhere near the cause, and it could not reproduce on
+ * localhost.
+ *
+ * Serving over plain HTTP is a legitimate choice for a self-hosted instance on
+ * a trusted network, so this is a fact about the deployment, not a thing to
+ * infer from the build mode.
+ */
+const cookiesSecure = appOrigin.startsWith("https://");
+
 export const config = {
   nodeEnv,
   isProduction,
   port: Number(process.env.PORT ?? 5174),
-  appOrigin: required("APP_ORIGIN", "http://localhost:5173"),
+  appOrigin,
+  cookiesSecure,
   allowRegistration: (process.env.ALLOW_REGISTRATION ?? "true") !== "false",
   sessionSecret,
   db: {

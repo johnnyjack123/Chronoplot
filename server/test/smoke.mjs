@@ -13,8 +13,13 @@ const ORIGIN = process.env.ORIGIN ?? "http://localhost:5173";
 let cookies = new Map();
 const cookieHeader = () => [...cookies].map(([k, v]) => `${k}=${v}`).join("; ");
 
+/** The raw Set-Cookie lines from the most recent response that sent any. */
+let lastSetCookies = [];
+
 function absorb(res) {
-  for (const raw of res.headers.getSetCookie?.() ?? []) {
+  const raws = res.headers.getSetCookie?.() ?? [];
+  if (raws.length) lastSetCookies = raws;
+  for (const raw of raws) {
     const [pair] = raw.split(";");
     const idx = pair.indexOf("=");
     const name = pair.slice(0, idx);
@@ -69,6 +74,28 @@ r = await call("POST", "/api/auth/register", { email, password, name: "Smoke Tes
 check("register succeeds", r.status === 200 && r.json.user?.email === email, JSON.stringify(r.json).slice(0, 120));
 check("session cookie set", cookies.has("cp_session"));
 check("csrf cookie set", cookies.has("cp_csrf"));
+
+/*
+ * The Secure flag has to agree with the scheme, or the browser throws the
+ * cookie away and says nothing. Marking cookies Secure whenever NODE_ENV was
+ * "production" did exactly that to every instance served over plain HTTP: the
+ * login returned 200 and the user, no cookie was stored, and the next request
+ * was unauthenticated. It could not reproduce on localhost, which browsers
+ * treat as a secure origin - so assert against BASE's scheme, both ways.
+ */
+{
+  const session = lastSetCookies.find((line) => line.startsWith("cp_session="));
+  const secure = /;\s*Secure\b/i.test(session ?? "");
+  const wantSecure = BASE.startsWith("https://");
+  check(
+    `Secure flag matches the scheme (${wantSecure ? "https" : "http"})`,
+    secure === wantSecure,
+    `Secure=${secure}, expected ${wantSecure}`,
+  );
+  check("session cookie is httpOnly", /;\s*HttpOnly\b/i.test(session ?? ""));
+  check("csrf cookie is readable by script",
+    !/;\s*HttpOnly\b/i.test(lastSetCookies.find((l) => l.startsWith("cp_csrf=")) ?? "x"));
+}
 
 // 4. weak password rejected
 const before = new Map(cookies);
