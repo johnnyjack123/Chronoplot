@@ -28,6 +28,23 @@ export class ApiError extends Error {
   }
 }
 
+/*
+ * Called whenever the server reports that nobody is signed in.
+ *
+ * A callback rather than an import of the session store, which imports this
+ * module - and registering it in one place means no caller can be the one that
+ * forgets. Without this the app could sit on the dashboard with a user object
+ * in memory that the server had already stopped recognising, showing a red
+ * "You must be signed in." on every action and only admitting the truth on
+ * reload. That state was real, and it was impossible to get out of by using
+ * the app.
+ */
+let onUnauthenticated: (() => void) | undefined;
+
+export function setUnauthenticatedHandler(handler: () => void): void {
+  onUnauthenticated = handler;
+}
+
 function readCookie(name: string): string | undefined {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
@@ -79,6 +96,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!response.ok) {
     const error = (payload as { error?: { code?: string; message?: string; details?: unknown } })?.error;
+
+    /*
+     * The sign-in and registration endpoints are exempt: a 401 there means
+     * "wrong password", which belongs on the form the user is looking at, not
+     * in a redirect that throws the message away.
+     */
+    if (response.status === 401 && !path.startsWith("/api/auth/")) onUnauthenticated?.();
+
     throw new ApiError(
       response.status,
       error?.code ?? "unknown_error",

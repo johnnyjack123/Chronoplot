@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError, type SessionUser } from "@/lib/api";
+import { api, ApiError, setUnauthenticatedHandler, type SessionUser } from "@/lib/api";
 
 interface SessionState {
   user: SessionUser | null;
@@ -42,3 +42,13 @@ export const useSessionStore = create<SessionState>((set) => ({
   // Signing in or completing setup means the instance is no longer empty.
   setUser: (user) => set({ user, needsSetup: false, ready: true }),
 }));
+
+/*
+ * Any 401 from anywhere means the session is gone, whatever this tab believes.
+ * Dropping the user is enough to act on it: the route guard in App.tsx derives
+ * the redirect from exactly this, so there is one rule about who may see a
+ * page rather than a second one here that could disagree with it.
+ */
+setUnauthenticatedHandler(() => {
+  useSessionStore.setState({ user: null, ready: true });
+});

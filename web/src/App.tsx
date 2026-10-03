@@ -33,6 +33,26 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * The mirror of RequireAuth, for the two pages that exist to get you a session.
+ *
+ * Reaching a sign-in form while already signed in is the same confusion as the
+ * dashboard while signed out, just pointing the other way - and it is exactly
+ * what the browser's back button does after a login.
+ */
+function RedirectIfAuthed({ children, page }: { children: React.ReactNode; page: "signin" | "setup" }) {
+  const { user, ready, needsSetup } = useSessionStore();
+
+  if (!ready) return <BootScreen />;
+  if (user) return <Navigate to="/" replace />;
+  // Setup is for an instance with no accounts. Once one exists, the way in is
+  // the sign-in form - offering to "create the administrator" again would be a
+  // promise the server refuses to keep.
+  if (page === "setup" && !needsSetup) return <Navigate to="/signin" replace />;
+  if (page === "signin" && needsSetup) return <Navigate to="/setup" replace />;
+  return <>{children}</>;
+}
+
 export function App() {
   const refresh = useSessionStore((state) => state.refresh);
   const activeTheme = useThemeStore((state) => state.active);
@@ -51,8 +71,22 @@ export function App() {
     <BrowserRouter>
       <TooltipProvider>
         <Routes>
-          <Route path="/setup" element={<SetupPage />} />
-          <Route path="/signin" element={<AuthPage />} />
+          <Route
+            path="/setup"
+            element={
+              <RedirectIfAuthed page="setup">
+                <SetupPage />
+              </RedirectIfAuthed>
+            }
+          />
+          <Route
+            path="/signin"
+            element={
+              <RedirectIfAuthed page="signin">
+                <AuthPage />
+              </RedirectIfAuthed>
+            }
+          />
           <Route
             path="/"
             element={
