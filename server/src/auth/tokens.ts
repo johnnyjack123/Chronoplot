@@ -69,11 +69,15 @@ export async function resolveApiToken(
   db: Db,
   header: string | undefined,
 ): Promise<TokenBearer | undefined> {
-  if (!header) return undefined;
+  if (!header) {
+    return undefined;
+  }
 
   const match = /^Bearer\s+(\S+)$/i.exec(header);
   const token = match?.[1];
-  if (!token || !token.startsWith(PREFIX)) return undefined;
+  if (!token || !token.startsWith(PREFIX)) {
+    return undefined;
+  }
 
   const row = await db.get<
     ApiTokenRow & { email: string; name: string; user_name: string; role: UserRole }
@@ -85,7 +89,9 @@ export async function resolveApiToken(
       WHERE t.token_hash = ?`,
     [digest(token)],
   );
-  if (!row) return undefined;
+  if (!row) {
+    return undefined;
+  }
 
   const expiresAt = row.expires_at === null ? null : Number(row.expires_at);
   if (expiresAt !== null && expiresAt <= Date.now()) {
@@ -137,7 +143,9 @@ export async function revokeApiToken(db: Db, userId: string, tokenId: string): P
     `SELECT id FROM api_tokens WHERE id = ? AND user_id = ?`,
     [tokenId, userId],
   );
-  if (!row) return false;
+  if (!row) {
+    return false;
+  }
 
   await db.run(`DELETE FROM api_tokens WHERE id = ?`, [tokenId]);
   return true;

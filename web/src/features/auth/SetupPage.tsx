@@ -26,10 +26,14 @@ export function SetupPage() {
   const [taken, setTaken] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  if (ready && user) return <Navigate to="/" replace />;
+  if (ready && user) {
+    return <Navigate to="/" replace />;
+  }
   // Somebody set it up already - possibly in another tab, possibly someone
   // else. Either way this page no longer has a job.
-  if (ready && !needsSetup && !taken) return <Navigate to="/signin" replace />;
+  if (ready && !needsSetup && !taken) {
+    return <Navigate to="/signin" replace />;
+  }
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();

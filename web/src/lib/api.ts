@@ -66,10 +66,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const method = options.method ?? "GET";
   const headers: Record<string, string> = {};
 
-  if (options.body !== undefined) headers["content-type"] = "application/json";
+  if (options.body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
   if (method !== "GET") {
     const csrf = readCookie("cp_csrf");
-    if (csrf) headers["x-csrf-token"] = csrf;
+    if (csrf) {
+      headers["x-csrf-token"] = csrf;
+    }
   }
 
   let response: Response;
@@ -88,7 +92,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(0, "network_error", "Cannot reach the server.", cause);
   }
 
-  if (response.status === 204) return undefined as T;
+  if (response.status === 204) {
+    return undefined as T;
+  }
 
   const text = await response.text();
   let payload: unknown;
@@ -106,7 +112,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
      * "wrong password", which belongs on the form the user is looking at, not
      * in a redirect that throws the message away.
      */
-    if (response.status === 401 && !path.startsWith("/api/auth/")) onUnauthenticated?.();
+    if (response.status === 401 && !path.startsWith("/api/auth/")) {
+      onUnauthenticated?.();
+    }
 
     throw new ApiError(
       response.status,

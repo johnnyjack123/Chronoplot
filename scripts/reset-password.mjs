@@ -37,11 +37,15 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ARGON2 = { algorithm: Algorithm.Argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
 
 function databasePath() {
-  if (process.env.DATABASE_URL) return resolve(repoRoot, process.env.DATABASE_URL);
+  if (process.env.DATABASE_URL) {
+    return resolve(repoRoot, process.env.DATABASE_URL);
+  }
   const envFile = resolve(repoRoot, ".env");
   if (existsSync(envFile)) {
     const match = /^DATABASE_URL\s*=\s*(.+)$/m.exec(readFileSync(envFile, "utf8"));
-    if (match?.[1]) return resolve(repoRoot, match[1].trim());
+    if (match?.[1]) {
+      return resolve(repoRoot, match[1].trim());
+    }
   }
   return resolve(repoRoot, "data/chronoplot.sqlite");
 }
@@ -110,7 +114,11 @@ const removed = db.prepare("DELETE FROM sessions WHERE user_id = ?").run(user.id
 db.close();
 
 console.log(`Password set for ${user.email} (${user.name}).`);
-if (wantsAdmin && hasRoles) console.log("Promoted to administrator.");
-if (!chosen) console.log(`\n  ${password}\n`);
+if (wantsAdmin && hasRoles) {
+  console.log("Promoted to administrator.");
+}
+if (!chosen) {
+  console.log(`\n  ${password}\n`);
+}
 console.log(`${removed} existing session(s) signed out.`);
 console.log("Sign in with it, then change it from the account screen.");

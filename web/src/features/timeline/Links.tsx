@@ -35,8 +35,12 @@ const round1 = (value: number): number => Math.round(value * 10) / 10;
  * itself.
  */
 export function roundedPath(points: Point[], radius = CORNER): string {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${round1(points[0]!.x)} ${round1(points[0]!.y)}`;
+  if (points.length === 0) {
+    return "";
+  }
+  if (points.length === 1) {
+    return `M ${round1(points[0]!.x)} ${round1(points[0]!.y)}`;
+  }
 
   const parts = [`M ${round1(points[0]!.x)} ${round1(points[0]!.y)}`];
 
@@ -124,7 +128,9 @@ export const LinkLayer = memo(function LinkLayer({
   /** Arrows touching this item are drawn in the accent colour. */
   highlightItemId?: string | null;
 }) {
-  if (links.length === 0) return null;
+  if (links.length === 0) {
+    return null;
+  }
 
   return (
     <svg
@@ -151,7 +157,9 @@ export const LinkLayer = memo(function LinkLayer({
         const from = findPlacedItem(layout, link.fromId);
         const to = findPlacedItem(layout, link.toId);
         // A link whose endpoint sits in a collapsed group has nothing to draw.
-        if (!from || !to) return null;
+        if (!from || !to) {
+          return null;
+        }
 
         const active = highlightItemId === link.fromId || highlightItemId === link.toId;
         return (

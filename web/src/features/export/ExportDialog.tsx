@@ -121,9 +121,13 @@ export function ExportDialog({
           { title, theme, showLaneLabels: repeatLaneLabels, transparent },
           Number(pngScale),
         );
-        if (current) setPngDimensions(size);
+        if (current) {
+          setPngDimensions(size);
+        }
       } catch {
-        if (current) setPngDimensions(null);
+        if (current) {
+          setPngDimensions(null);
+        }
       }
     })();
     return () => {

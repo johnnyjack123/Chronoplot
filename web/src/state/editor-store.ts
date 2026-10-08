@@ -37,7 +37,9 @@ interface HistoryEntry {
  */
 function dominantPrecision(doc: TimelineDoc): Precision {
   const tally = new Map<Precision, number>();
-  for (const item of doc.items) tally.set(item.precision, (tally.get(item.precision) ?? 0) + 1);
+  for (const item of doc.items) {
+    tally.set(item.precision, (tally.get(item.precision) ?? 0) + 1);
+  }
 
   let best: Precision = "day";
   let bestCount = 0;
@@ -190,11 +192,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   mutate: (recipe, options) => {
     const state = get();
-    if (!state.doc) return;
-    if (state.role === "viewer") return; // Read-only access edits nothing.
+    if (!state.doc) {
+      return;
+    }
+    if (state.role === "viewer") {
+      return;
+    } // Read-only access edits nothing.
 
     const next = produce(state.doc, recipe);
-    if (next === state.doc) return; // The recipe changed nothing.
+    if (next === state.doc) {
+      return;
+    } // The recipe changed nothing.
 
     const now = Date.now();
     const last = state.past[state.past.length - 1];
@@ -223,7 +231,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   undo: () => {
     const state = get();
     const previous = state.past[state.past.length - 1];
-    if (!previous || !state.doc) return;
+    if (!previous || !state.doc) {
+      return;
+    }
     set({
       doc: previous.doc,
       past: state.past.slice(0, -1),
@@ -235,7 +245,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   redo: () => {
     const state = get();
     const next = state.future[state.future.length - 1];
-    if (!next || !state.doc) return;
+    if (!next || !state.doc) {
+      return;
+    }
     set({
       doc: next.doc,
       future: state.future.slice(0, -1),
@@ -307,7 +319,9 @@ export const commands = {
   addSubLane(rowId: string): void {
     useEditorStore.getState().mutate((draft) => {
       const row = draft.rows.find((candidate) => candidate.id === rowId);
-      if (!row) return;
+      if (!row) {
+        return;
+      }
       // Count from what is drawn, not from the stored number: a lane the packer
       // already split needs the new sub-lane *below* those, or pressing the
       // button appears to do nothing.
@@ -330,7 +344,9 @@ export const commands = {
   removeSubLane(rowId: string): void {
     useEditorStore.getState().mutate((draft) => {
       const row = draft.rows.find((candidate) => candidate.id === rowId);
-      if (!row) return;
+      if (!row) {
+        return;
+      }
 
       // The effective count, not the stored one: a lane can have sub-lanes
       // purely because cards were pinned to them, with nothing on the row.
@@ -341,7 +357,9 @@ export const commands = {
           .filter((item) => item.rowId === rowId)
           .reduce((most, item) => Math.max(most, (item.subLane ?? 0) + 1), 1),
       );
-      if (effective <= 1) return;
+      if (effective <= 1) {
+        return;
+      }
 
       const doomed = effective - 1;
       for (const item of draft.items) {
@@ -349,8 +367,12 @@ export const commands = {
           item.subLane = doomed - 1;
         }
       }
-      if (doomed <= 1) delete row.subLanes;
-      else row.subLanes = doomed;
+      if (doomed <= 1) {
+        delete row.subLanes;
+      }
+      else {
+        row.subLanes = doomed;
+      }
     });
   },
 
@@ -388,7 +410,9 @@ export const commands = {
   renameRow(rowId: string, title: string): void {
     useEditorStore.getState().mutate((draft) => {
       const row = draft.rows.find((candidate) => candidate.id === rowId);
-      if (row) row.title = title;
+      if (row) {
+        row.title = title;
+      }
     }, { coalesceKey: `rename-row:${rowId}` });
   },
 
@@ -417,12 +441,18 @@ export const commands = {
    * target group.
    */
   reorderRow(rowId: string, targetGroupId: string | null, beforeRowId: string | null): void {
-    if (rowId === beforeRowId) return;
+    if (rowId === beforeRowId) {
+      return;
+    }
 
     useEditorStore.getState().mutate((draft) => {
       const moving = draft.rows.find((row) => row.id === rowId);
-      if (!moving) return;
-      if (targetGroupId !== null && !draft.groups.some((group) => group.id === targetGroupId)) return;
+      if (!moving) {
+        return;
+      }
+      if (targetGroupId !== null && !draft.groups.some((group) => group.id === targetGroupId)) {
+        return;
+      }
 
       const rest = draft.rows.filter((row) => row.id !== rowId);
       moving.groupId = targetGroupId;
@@ -444,11 +474,15 @@ export const commands = {
 
   /** Moves a group before another, or to the end when `beforeGroupId` is null. */
   reorderGroup(groupId: string, beforeGroupId: string | null): void {
-    if (groupId === beforeGroupId) return;
+    if (groupId === beforeGroupId) {
+      return;
+    }
 
     useEditorStore.getState().mutate((draft) => {
       const moving = draft.groups.find((group) => group.id === groupId);
-      if (!moving) return;
+      if (!moving) {
+        return;
+      }
 
       const rest = draft.groups.filter((group) => group.id !== groupId);
       const at = beforeGroupId === null ? rest.length : rest.findIndex((group) => group.id === beforeGroupId);
@@ -461,16 +495,24 @@ export const commands = {
   setRowColor(rowId: string, color: number | undefined): void {
     useEditorStore.getState().mutate((draft) => {
       const row = draft.rows.find((candidate) => candidate.id === rowId);
-      if (!row) return;
-      if (color === undefined) delete row.color;
-      else row.color = color;
+      if (!row) {
+        return;
+      }
+      if (color === undefined) {
+        delete row.color;
+      }
+      else {
+        row.color = color;
+      }
     });
   },
 
   setRowGroup(rowId: string, groupId: string | null): void {
     useEditorStore.getState().mutate((draft) => {
       const row = draft.rows.find((candidate) => candidate.id === rowId);
-      if (row) row.groupId = groupId;
+      if (row) {
+        row.groupId = groupId;
+      }
     });
   },
 
@@ -488,14 +530,18 @@ export const commands = {
   renameGroup(groupId: string, title: string): void {
     useEditorStore.getState().mutate((draft) => {
       const group = draft.groups.find((candidate) => candidate.id === groupId);
-      if (group) group.title = title;
+      if (group) {
+        group.title = title;
+      }
     }, { coalesceKey: `rename-group:${groupId}` });
   },
 
   toggleGroup(groupId: string): void {
     useEditorStore.getState().mutate((draft) => {
       const group = draft.groups.find((candidate) => candidate.id === groupId);
-      if (group) group.collapsed = !group.collapsed;
+      if (group) {
+        group.collapsed = !group.collapsed;
+      }
     });
   },
 
@@ -505,7 +551,9 @@ export const commands = {
       // being deleted with it, because losing work to a mis-click is worse than
       // an extra tidy-up step.
       for (const row of draft.rows) {
-        if (row.groupId === groupId) row.groupId = null;
+        if (row.groupId === groupId) {
+          row.groupId = null;
+        }
       }
       draft.groups = draft.groups.filter((group) => group.id !== groupId);
     });
@@ -541,16 +589,24 @@ export const commands = {
   },
 
   updateItem(itemId: string, patch: Partial<Item>, coalesceKey?: string): void {
-    if (patch.precision) useEditorStore.getState().setLastPrecision(patch.precision);
+    if (patch.precision) {
+      useEditorStore.getState().setLastPrecision(patch.precision);
+    }
 
     useEditorStore.getState().mutate((draft) => {
       const item = draft.items.find((candidate) => candidate.id === itemId);
-      if (!item) return;
+      if (!item) {
+        return;
+      }
       Object.assign(item, patch);
       // A milestone is a single day by definition; enforcing it here means no
       // caller can produce a document the server would reject.
-      if (item.kind === "milestone") item.end = item.start;
-      if (item.end < item.start) item.end = item.start;
+      if (item.kind === "milestone") {
+        item.end = item.start;
+      }
+      if (item.end < item.start) {
+        item.end = item.start;
+      }
     }, coalesceKey ? { coalesceKey } : undefined);
   },
 
@@ -558,7 +614,9 @@ export const commands = {
   duplicateItem(itemId: string): string | null {
     const state = useEditorStore.getState();
     const source = state.doc?.items.find((item) => item.id === itemId);
-    if (!source) return null;
+    if (!source) {
+      return null;
+    }
 
     const id = newId();
     const span = daysBetween(source.start, source.end);
@@ -578,14 +636,18 @@ export const commands = {
   },
 
   linkItems(fromId: string, toId: string): void {
-    if (fromId === toId) return;
+    if (fromId === toId) {
+      return;
+    }
     useEditorStore.getState().mutate((draft) => {
       const exists = draft.links.some(
         (link) =>
           (link.fromId === fromId && link.toId === toId) ||
           (link.fromId === toId && link.toId === fromId),
       );
-      if (!exists) draft.links.push({ id: newId(), fromId, toId });
+      if (!exists) {
+        draft.links.push({ id: newId(), fromId, toId });
+      }
     });
   },
 
@@ -605,13 +667,21 @@ export const commands = {
       // plan, and it stops a mistyped year from producing a document whose
       // span makes every later calculation meaningless.
       const ceiling = addYears(draft.settings.start, MAX_SPAN_YEARS);
-      if (draft.settings.end > ceiling) draft.settings.end = ceiling;
+      if (draft.settings.end > ceiling) {
+        draft.settings.end = ceiling;
+      }
       // Items outside the new window would be invisible and unreachable, so
       // pull them back inside rather than silently losing them.
       for (const item of draft.items) {
-        if (item.start < draft.settings.start) item.start = draft.settings.start;
-        if (item.end > draft.settings.end) item.end = draft.settings.end;
-        if (item.end < item.start) item.end = item.start;
+        if (item.start < draft.settings.start) {
+          item.start = draft.settings.start;
+        }
+        if (item.end > draft.settings.end) {
+          item.end = draft.settings.end;
+        }
+        if (item.end < item.start) {
+          item.end = item.start;
+        }
       }
     });
   },
@@ -619,12 +689,18 @@ export const commands = {
   /** Extends the window to whole months or years around the current range. */
   fitWindowToItems(): void {
     useEditorStore.getState().mutate((draft) => {
-      if (draft.items.length === 0) return;
+      if (draft.items.length === 0) {
+        return;
+      }
       let min = draft.items[0]!.start;
       let max = draft.items[0]!.end;
       for (const item of draft.items) {
-        if (item.start < min) min = item.start;
-        if (item.end > max) max = item.end;
+        if (item.start < min) {
+          min = item.start;
+        }
+        if (item.end > max) {
+          max = item.end;
+        }
       }
       const wide = draft.settings.granularity === "year" || draft.settings.granularity === "quarter";
       draft.settings.start = wide ? startOfYear(min) : startOfMonth(min);
@@ -636,7 +712,9 @@ export const commands = {
 /** A sensible new row plus a first card, used by the empty-state button. */
 export function seedExample(): void {
   const state = useEditorStore.getState();
-  if (!state.doc) return;
+  if (!state.doc) {
+    return;
+  }
   const start = state.doc.settings.start;
   const rowId = state.doc.rows[0]?.id ?? commands.addRow("Lane 1");
   commands.addItem({

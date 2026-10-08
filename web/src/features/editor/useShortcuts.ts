@@ -7,7 +7,9 @@ import { commands, useEditorStore } from "@/state/editor-store";
  */
 function isTyping(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null;
-  if (!element) return false;
+  if (!element) {
+    return false;
+  }
   const tag = element.tagName;
   return (
     tag === "INPUT" ||
@@ -19,7 +21,9 @@ function isTyping(target: EventTarget | null): boolean {
 
 export function useShortcuts(enabled: boolean): void {
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
 
     const onKeyDown = (event: KeyboardEvent): void => {
       const store = useEditorStore.getState();
@@ -42,12 +46,18 @@ export function useShortcuts(enabled: boolean): void {
         return;
       }
 
-      if (isTyping(event.target)) return;
+      if (isTyping(event.target)) {
+        return;
+      }
 
       if (mod && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        if (event.shiftKey) store.redo();
-        else store.undo();
+        if (event.shiftKey) {
+          store.redo();
+        }
+        else {
+          store.undo();
+        }
         return;
       }
 
@@ -64,7 +74,9 @@ export function useShortcuts(enabled: boolean): void {
         if (mod && event.key.toLowerCase() === "d") {
           event.preventDefault();
           const id = commands.duplicateItem(itemId);
-          if (id) store.select({ kind: "item", id });
+          if (id) {
+            store.select({ kind: "item", id });
+          }
           return;
         }
 
@@ -80,7 +92,9 @@ export function useShortcuts(enabled: boolean): void {
         if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
           event.preventDefault();
           const item = store.doc?.items.find((candidate) => candidate.id === itemId);
-          if (!item) return;
+          if (!item) {
+            return;
+          }
           const step = (event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 7 : 1);
           const shift = (date: string): string => {
             const time = Date.parse(`${date}T00:00:00Z`) + step * 86_400_000;
@@ -103,13 +117,17 @@ export function useShortcuts(enabled: boolean): void {
        */
       if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         const doc = store.doc;
-        if (!doc) return;
+        if (!doc) {
+          return;
+        }
         const direction = event.key === "ArrowUp" ? -1 : 1;
 
         if (store.selection.kind === "row") {
           const rowId = store.selection.id;
           const row = doc.rows.find((candidate) => candidate.id === rowId);
-          if (!row) return;
+          if (!row) {
+            return;
+          }
           event.preventDefault();
 
           // Move within the lane's own group, since a keystroke should not
@@ -117,7 +135,9 @@ export function useShortcuts(enabled: boolean): void {
           const siblings = doc.rows.filter((candidate) => candidate.groupId === row.groupId);
           const index = siblings.findIndex((candidate) => candidate.id === rowId);
           const target = index + direction;
-          if (target < 0 || target >= siblings.length) return;
+          if (target < 0 || target >= siblings.length) {
+            return;
+          }
 
           commands.reorderRow(
             rowId,
@@ -131,7 +151,9 @@ export function useShortcuts(enabled: boolean): void {
           const groupId = store.selection.id;
           const index = doc.groups.findIndex((candidate) => candidate.id === groupId);
           const target = index + direction;
-          if (index === -1 || target < 0 || target >= doc.groups.length) return;
+          if (index === -1 || target < 0 || target >= doc.groups.length) {
+            return;
+          }
           event.preventDefault();
 
           commands.reorderGroup(

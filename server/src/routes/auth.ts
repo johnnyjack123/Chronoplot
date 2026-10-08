@@ -22,7 +22,9 @@ const MAX_ATTEMPTS = 10;
 
 function assertNotLockedOut(email: string): void {
   const record = attempts.get(email);
-  if (!record) return;
+  if (!record) {
+    return;
+  }
   if (Date.now() - record.firstAt > ATTEMPT_WINDOW_MS) {
     attempts.delete(email);
     return;

@@ -29,15 +29,21 @@ async function loadAccess(db: Db, projectId: string, userId: string): Promise<Ac
   const project = await db.get<ProjectRow>(`SELECT * FROM projects WHERE id = ?`, [projectId]);
   // A project the caller may not see is reported as missing, not as forbidden,
   // so ids cannot be probed for existence.
-  if (!project) throw new HttpError(404, "not_found", "Project not found.");
+  if (!project) {
+    throw new HttpError(404, "not_found", "Project not found.");
+  }
 
-  if (project.owner_id === userId) return { project, role: "owner" };
+  if (project.owner_id === userId) {
+    return { project, role: "owner" };
+  }
 
   const member = await db.get<{ role: MemberRole }>(
     `SELECT role FROM project_members WHERE project_id = ? AND user_id = ?`,
     [projectId, userId],
   );
-  if (!member) throw new HttpError(404, "not_found", "Project not found.");
+  if (!member) {
+    throw new HttpError(404, "not_found", "Project not found.");
+  }
 
   return { project, role: member.role };
 }
@@ -270,7 +276,9 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const version = Number(access.project.version);
-      if (body.dryRun) return { ...result, version };
+      if (body.dryRun) {
+        return { ...result, version };
+      }
 
       const nextVersion = version + 1;
       await tx.run(

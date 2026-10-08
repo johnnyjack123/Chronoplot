@@ -45,8 +45,12 @@ for (const path of mustBeIgnored) {
   } catch {
     ignored = false;
   }
-  if (ignored) pass(`${path} is ignored`);
-  else fail(`${path} is NOT ignored - add it to .gitignore`);
+  if (ignored) {
+    pass(`${path} is ignored`);
+  }
+  else {
+    fail(`${path} is NOT ignored - add it to .gitignore`);
+  }
 }
 
 /* ------------------------------------------------- 2. tracked file names -- */
@@ -72,8 +76,14 @@ const badName =
   /(^|\/)\.env($|\.)|\.(sqlite|sqlite3|db|pem|key|p12|pfx|keystore|jks)$|(^|\/)id_(rsa|ed25519)$/i;
 
 const namedBad = tracked.filter((file) => badName.test(file));
-if (namedBad.length === 0) pass(`${tracked.length} tracked files, none with a sensitive name`);
-else for (const file of namedBad) fail(`tracked: ${file}`);
+if (namedBad.length === 0) {
+  pass(`${tracked.length} tracked files, none with a sensitive name`);
+}
+else {
+  for (const file of namedBad) {
+    fail(`tracked: ${file}`);
+  }
+}
 
 /* ------------------------------------------------------ 3. file contents -- */
 console.log("\n3. No secret-shaped content in tracked text files");
@@ -107,12 +117,18 @@ const skip = /^(package-lock\.json|.*\.(png|jpg|jpeg|gif|svg|ico|pdf|woff2?|ttf)
 const findings = [];
 
 for (const file of tracked) {
-  if (skip.test(file)) continue;
+  if (skip.test(file)) {
+    continue;
+  }
   const text = readTracked(file);
-  if (text === null) continue;
+  if (text === null) {
+    continue;
+  }
   for (const [pattern, label] of patterns) {
     const match = pattern.exec(text);
-    if (!match) continue;
+    if (!match) {
+      continue;
+    }
     if (placeholder.test(match[0])) {
       warn(`${file}: ${label}, but the value is a placeholder (${match[0].slice(0, 40)}…)`);
       continue;
@@ -121,8 +137,14 @@ for (const file of tracked) {
   }
 }
 
-if (findings.length === 0) pass("no private keys, provider tokens or credentialed URLs");
-else for (const finding of findings) fail(`${finding.file}: ${finding.label} (${finding.sample}…)`);
+if (findings.length === 0) {
+  pass("no private keys, provider tokens or credentialed URLs");
+}
+else {
+  for (const finding of findings) {
+    fail(`${finding.file}: ${finding.label} (${finding.sample}…)`);
+  }
+}
 
 /* ------------------------------------------- 4. history, not just HEAD -- */
 console.log("\n4. History carries nothing sensitive either");
@@ -135,8 +157,14 @@ const everTracked = new Set(
 );
 
 const historyBad = [...everTracked].filter((file) => badName.test(file));
-if (historyBad.length === 0) pass(`${everTracked.size} files ever added, none sensitive by name`);
-else for (const file of historyBad) fail(`was committed at some point: ${file} - history rewrite needed`);
+if (historyBad.length === 0) {
+  pass(`${everTracked.size} files ever added, none sensitive by name`);
+}
+else {
+  for (const file of historyBad) {
+    fail(`was committed at some point: ${file} - history rewrite needed`);
+  }
+}
 
 /* --------------------------------------- 5. things that need a human eye -- */
 console.log("\n5. Placeholders and test values (expected, listed for review)");
@@ -148,16 +176,28 @@ const reviewable = [
 
 const notes = [];
 for (const file of tracked) {
-  if (skip.test(file)) continue;
+  if (skip.test(file)) {
+    continue;
+  }
   const text = readTracked(file);
-  if (text === null) continue;
+  if (text === null) {
+    continue;
+  }
   for (const [pattern, label] of reviewable) {
-    if (pattern.test(text)) notes.push(`${file}: ${label}`);
+    if (pattern.test(text)) {
+      notes.push(`${file}: ${label}`);
+    }
   }
 }
 
-if (notes.length === 0) pass("nothing to review");
-else for (const note of [...new Set(notes)]) warn(note);
+if (notes.length === 0) {
+  pass("nothing to review");
+}
+else {
+  for (const note of [...new Set(notes)]) {
+    warn(note);
+  }
+}
 
 /* ------------------------------------------------------------- verdict -- */
 console.log(

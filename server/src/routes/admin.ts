@@ -108,7 +108,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     const db = await getDb();
     const target = await db.get<UserRow>(`SELECT id FROM users WHERE id = ?`, [id]);
-    if (!target) throw new HttpError(404, "user_not_found", "No such account.");
+    if (!target) {
+      throw new HttpError(404, "user_not_found", "No such account.");
+    }
 
     await db.run(`UPDATE users SET password_hash = ? WHERE id = ?`, [
       await hashPassword(body.password),
@@ -129,7 +131,9 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     const db = await getDb();
     const target = await db.get<UserRow>(`SELECT id, role FROM users WHERE id = ?`, [id]);
-    if (!target) throw new HttpError(404, "user_not_found", "No such account.");
+    if (!target) {
+      throw new HttpError(404, "user_not_found", "No such account.");
+    }
 
     if (body.role && body.role !== "admin" && target.role === "admin") {
       await assertNotLastAdmin(db, id, "demote");
@@ -138,8 +142,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "cannot_demote_self", "You cannot remove your own admin rights.");
     }
 
-    if (body.role) await db.run(`UPDATE users SET role = ? WHERE id = ?`, [body.role, id]);
-    if (body.name) await db.run(`UPDATE users SET name = ? WHERE id = ?`, [body.name.trim(), id]);
+    if (body.role) {
+      await db.run(`UPDATE users SET role = ? WHERE id = ?`, [body.role, id]);
+    }
+    if (body.name) {
+      await db.run(`UPDATE users SET name = ? WHERE id = ?`, [body.name.trim(), id]);
+    }
     return { ok: true };
   });
 
@@ -153,8 +161,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
     const db = await getDb();
     const target = await db.get<UserRow>(`SELECT id, role FROM users WHERE id = ?`, [id]);
-    if (!target) throw new HttpError(404, "user_not_found", "No such account.");
-    if (target.role === "admin") await assertNotLastAdmin(db, id, "delete");
+    if (!target) {
+      throw new HttpError(404, "user_not_found", "No such account.");
+    }
+    if (target.role === "admin") {
+      await assertNotLastAdmin(db, id, "delete");
+    }
 
     // Projects and memberships cascade from the foreign keys, so this really
     // does remove everything the account owned.

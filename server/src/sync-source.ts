@@ -30,13 +30,21 @@ function applySourceFields(target: Item, incoming: SyncItem, vault: string): voi
       ? start
       : snapToUnit(incoming.end ?? incoming.start, incoming.precision, "end");
 
-  if (target.end < target.start) target.end = target.start;
+  if (target.end < target.start) {
+    target.end = target.start;
+  }
 
   // Optional fields are only written when the source states them, so a colour
   // or a note added in Chronoplot survives the next sync.
-  if (incoming.color !== undefined) target.color = incoming.color;
-  if (incoming.notes !== undefined) target.notes = incoming.notes;
-  if (incoming.progress !== undefined) target.progress = incoming.progress;
+  if (incoming.color !== undefined) {
+    target.color = incoming.color;
+  }
+  if (incoming.notes !== undefined) {
+    target.notes = incoming.notes;
+  }
+  if (incoming.progress !== undefined) {
+    target.progress = incoming.progress;
+  }
 
   target.source = {
     kind: "obsidian",
@@ -69,7 +77,9 @@ export function reconcile(
   /* ------------------------------------------------------------- lanes -- */
 
   const laneByName = new Map<string, Row>();
-  for (const row of next.rows) laneByName.set(row.title.trim().toLowerCase(), row);
+  for (const row of next.rows) {
+    laneByName.set(row.title.trim().toLowerCase(), row);
+  }
 
   const laneFor = (name: string | undefined): string => {
     // Everything has to land somewhere. A source that names no lane gets one
@@ -78,7 +88,9 @@ export function reconcile(
     const key = wanted.toLowerCase();
 
     const existing = laneByName.get(key);
-    if (existing) return existing.id;
+    if (existing) {
+      return existing.id;
+    }
 
     const row: Row = { id: randomUUID(), groupId: null, title: wanted };
     next.rows.push(row);
@@ -91,7 +103,9 @@ export function reconcile(
 
   const owned = new Map<string, Item>();
   for (const item of next.items) {
-    if (sameSource(item, request.source) && item.source) owned.set(item.source.path, item);
+    if (sameSource(item, request.source) && item.source) {
+      owned.set(item.source.path, item);
+    }
   }
 
   let created = 0;
@@ -101,15 +115,21 @@ export function reconcile(
     // Dates outside the window would be invisible and unreachable, so widen the
     // window rather than silently clamping a note's dates to something it does
     // not say.
-    if (entry.start < next.settings.start) next.settings.start = entry.start;
+    if (entry.start < next.settings.start) {
+      next.settings.start = entry.start;
+    }
     const latest = entry.end ?? entry.start;
-    if (latest > next.settings.end) next.settings.end = latest;
+    if (latest > next.settings.end) {
+      next.settings.end = latest;
+    }
 
     const existing = owned.get(entry.path);
     if (existing) {
       applySourceFields(existing, entry, request.source.vault);
       // A lane named by the source moves the card; one it leaves out does not.
-      if (entry.lane !== undefined) existing.rowId = laneFor(entry.lane);
+      if (entry.lane !== undefined) {
+        existing.rowId = laneFor(entry.lane);
+      }
       updated++;
       continue;
     }

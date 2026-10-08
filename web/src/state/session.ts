@@ -26,7 +26,9 @@ export const useSessionStore = create<SessionState>((set) => ({
     } catch (error) {
       // A server that cannot be reached is not the same as being signed out,
       // but from the app's point of view both mean "show the sign-in screen".
-      if (!(error instanceof ApiError)) throw error;
+      if (!(error instanceof ApiError)) {
+        throw error;
+      }
       set({ user: null, ready: true });
     }
   },

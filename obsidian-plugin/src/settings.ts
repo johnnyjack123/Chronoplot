@@ -168,7 +168,9 @@ export class ChronoplotSettingTab extends PluginSettingTab {
           dropdown.addOption(binding.projectId, binding.projectTitle || binding.projectId);
         }
         dropdown.addOption("", "Choose a project…");
-        for (const project of this.projects) dropdown.addOption(project.id, project.title);
+        for (const project of this.projects) {
+          dropdown.addOption(project.id, project.title);
+        }
 
         dropdown.setValue(binding.projectId).onChange(async (value) => {
           binding.projectId = value;

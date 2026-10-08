@@ -28,13 +28,17 @@ export function EditorPage() {
   const readOnly = role === "viewer";
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     let cancelled = false;
 
     void (async () => {
       try {
         const { project } = await api.getProject(projectId);
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         load({
           projectId: project.id,
           title: project.title,
@@ -44,7 +48,9 @@ export function EditorPage() {
         });
         useSyncStore.getState().set({ status: "idle", message: null, conflict: null });
       } catch (caught) {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         if (caught instanceof ApiError && caught.status === 404) {
           setLoadError("This project does not exist, or you no longer have access to it.");
         } else {
@@ -69,7 +75,9 @@ export function EditorPage() {
    * document after a conflict.
    */
   useEffect(() => {
-    if (doc) setProjectTheme(doc.settings.theme);
+    if (doc) {
+      setProjectTheme(doc.settings.theme);
+    }
   }, [doc?.settings.theme, doc, setProjectTheme]);
 
   useSyncEngine(doc !== null && !readOnly);

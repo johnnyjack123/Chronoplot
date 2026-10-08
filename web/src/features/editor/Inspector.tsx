@@ -27,7 +27,9 @@ export function Inspector({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
   const active = (() => {
     if (selection.kind === "item") {
       const item = doc.items.find((candidate) => candidate.id === selection.id);
-      if (!item) return null;
+      if (!item) {
+        return null;
+      }
       return {
         eyebrow: item.kind === "milestone" ? "Milestone" : "Card",
         title: item.title || "Untitled",
@@ -36,7 +38,9 @@ export function Inspector({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
     }
     if (selection.kind === "row") {
       const row = doc.rows.find((candidate) => candidate.id === selection.id);
-      if (!row) return null;
+      if (!row) {
+        return null;
+      }
       return {
         eyebrow: "Lane",
         title: row.title || "Untitled lane",
@@ -45,7 +49,9 @@ export function Inspector({ doc, readOnly }: { doc: TimelineDoc; readOnly: boole
     }
     if (selection.kind === "group") {
       const group = doc.groups.find((candidate) => candidate.id === selection.id);
-      if (!group) return null;
+      if (!group) {
+        return null;
+      }
       return {
         eyebrow: "Group",
         title: group.title || "Untitled group",
@@ -108,7 +114,9 @@ function ItemInspector({
 }) {
   const item = doc.items.find((candidate) => candidate.id === itemId);
   const select = useEditorStore((state) => state.select);
-  if (!item) return null;
+  if (!item) {
+    return null;
+  }
 
   const links = doc.links.filter((link) => link.fromId === itemId || link.toId === itemId);
   const disabled = readOnly;
@@ -372,7 +380,9 @@ function ItemInspector({
               className="flex-1"
               onClick={() => {
                 const id = commands.duplicateItem(itemId);
-                if (id) select({ kind: "item", id });
+                if (id) {
+                  select({ kind: "item", id });
+                }
               }}
             >
               Duplicate
@@ -408,7 +418,9 @@ function RowInspector({
 }) {
   const row = doc.rows.find((candidate) => candidate.id === rowId);
   const select = useEditorStore((state) => state.select);
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
 
   const itemCount = doc.items.filter((item) => item.rowId === rowId).length;
 
@@ -517,7 +529,9 @@ function GroupInspector({ groupId, readOnly }: { groupId: string; readOnly: bool
   const doc = useEditorStore((state) => state.doc);
   const select = useEditorStore((state) => state.select);
   const group = doc?.groups.find((candidate) => candidate.id === groupId);
-  if (!group) return null;
+  if (!group) {
+    return null;
+  }
 
   return (
     <>

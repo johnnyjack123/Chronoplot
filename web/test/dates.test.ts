@@ -12,7 +12,9 @@ import {
 let failed = 0;
 function eq(label: string, actual: unknown, expected: unknown): void {
   const ok = Object.is(actual, expected);
-  if (!ok) failed++;
+  if (!ok) {
+    failed++;
+  }
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}${ok ? "" : `  got ${actual}, want ${expected}`}`);
 }
 

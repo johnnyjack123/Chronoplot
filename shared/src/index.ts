@@ -53,10 +53,16 @@ export function snapToUnit(
   precision: Precision,
   edge: "start" | "end",
 ): string {
-  if (precision === "day") return date;
-  if (precision === "year") return edge === "start" ? `${date.slice(0, 4)}-01-01` : `${date.slice(0, 4)}-12-31`;
+  if (precision === "day") {
+    return date;
+  }
+  if (precision === "year") {
+    return edge === "start" ? `${date.slice(0, 4)}-01-01` : `${date.slice(0, 4)}-12-31`;
+  }
 
-  if (edge === "start") return `${date.slice(0, 7)}-01`;
+  if (edge === "start") {
+    return `${date.slice(0, 7)}-01`;
+  }
   const year = Number(date.slice(0, 4));
   const month = Number(date.slice(5, 7)) - 1;
   return `${date.slice(0, 7)}-${String(daysInMonth(year, month)).padStart(2, "0")}`;
@@ -199,9 +205,15 @@ export function findDocumentInconsistencies(doc: TimelineDoc): string[] {
   const rowIds = new Set(doc.rows.map((r) => r.id));
   const itemIds = new Set(doc.items.map((i) => i.id));
 
-  if (groupIds.size !== doc.groups.length) problems.push("Duplicate group id");
-  if (rowIds.size !== doc.rows.length) problems.push("Duplicate row id");
-  if (itemIds.size !== doc.items.length) problems.push("Duplicate item id");
+  if (groupIds.size !== doc.groups.length) {
+    problems.push("Duplicate group id");
+  }
+  if (rowIds.size !== doc.rows.length) {
+    problems.push("Duplicate row id");
+  }
+  if (itemIds.size !== doc.items.length) {
+    problems.push("Duplicate item id");
+  }
 
   for (const row of doc.rows) {
     if (row.groupId !== null && !groupIds.has(row.groupId)) {

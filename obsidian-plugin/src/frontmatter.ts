@@ -32,26 +32,40 @@ function daysInMonth(year: number, month: number): number {
 
 function build(year: string, month?: string, day?: string): ParsedDate | null {
   const y = Number(year);
-  if (!Number.isInteger(y) || y < 1 || y > 9999) return null;
+  if (!Number.isInteger(y) || y < 1 || y > 9999) {
+    return null;
+  }
 
-  if (month === undefined) return { iso: `${pad(year, 4)}-01-01`, precision: "year" };
+  if (month === undefined) {
+    return { iso: `${pad(year, 4)}-01-01`, precision: "year" };
+  }
 
   const m = Number(month);
-  if (m < 1 || m > 12) return null;
+  if (m < 1 || m > 12) {
+    return null;
+  }
   if (day === undefined) {
     return { iso: `${pad(year, 4)}-${pad(month, 2)}-01`, precision: "month" };
   }
 
   const d = Number(day);
-  if (d < 1 || d > daysInMonth(y, m)) return null;
+  if (d < 1 || d > daysInMonth(y, m)) {
+    return null;
+  }
   return { iso: `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}`, precision: "day" };
 }
 
 /** Digit-only forms, by length: ddmmyyyy, mmyyyy, yyyy. */
 function fromDigits(digits: string): ParsedDate | null {
-  if (digits.length === 8) return build(digits.slice(4), digits.slice(2, 4), digits.slice(0, 2));
-  if (digits.length === 6) return build(digits.slice(2), digits.slice(0, 2));
-  if (digits.length === 4) return build(digits);
+  if (digits.length === 8) {
+    return build(digits.slice(4), digits.slice(2, 4), digits.slice(0, 2));
+  }
+  if (digits.length === 6) {
+    return build(digits.slice(2), digits.slice(0, 2));
+  }
+  if (digits.length === 4) {
+    return build(digits);
+  }
   return null;
 }
 
@@ -62,11 +76,15 @@ function fromDigits(digits: string): ParsedDate | null {
  * metadata cache hands back all three depending on how the value was written.
  */
 export function parseFrontmatterDate(raw: unknown): ParsedDate | null {
-  if (raw === null || raw === undefined || raw === "") return null;
+  if (raw === null || raw === undefined || raw === "") {
+    return null;
+  }
 
   /* A real Date: written as an unquoted ISO date, which YAML types as one. */
   if (raw instanceof Date) {
-    if (Number.isNaN(raw.getTime())) return null;
+    if (Number.isNaN(raw.getTime())) {
+      return null;
+    }
     return { iso: raw.toISOString().slice(0, 10), precision: "day" };
   }
 
@@ -76,14 +94,20 @@ export function parseFrontmatterDate(raw: unknown): ParsedDate | null {
    * report it, so the note gets quoted rather than relying on this forever.
    */
   if (typeof raw === "number") {
-    if (!Number.isInteger(raw) || raw < 0) return null;
+    if (!Number.isInteger(raw) || raw < 0) {
+      return null;
+    }
 
     const digits = String(raw);
     const target = [4, 6, 8].find((length) => digits.length <= length);
-    if (target === undefined) return null;
+    if (target === undefined) {
+      return null;
+    }
 
     const parsed = fromDigits(pad(digits, target));
-    if (!parsed) return null;
+    if (!parsed) {
+      return null;
+    }
     return digits.length === target
       ? parsed
       : {
@@ -92,25 +116,37 @@ export function parseFrontmatterDate(raw: unknown): ParsedDate | null {
         };
   }
 
-  if (typeof raw !== "string") return null;
+  if (typeof raw !== "string") {
+    return null;
+  }
   const text = raw.trim();
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
 
   /* ISO: 2026-03-01, 2026-03, 2026 */
   let match = /^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/.exec(text);
-  if (match) return build(match[1]!, match[2], match[3]);
+  if (match) {
+    return build(match[1]!, match[2], match[3]);
+  }
 
   /* Dotted or slashed, day first: 01.03.2026, 1/3/2026 */
   match = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(text);
-  if (match) return build(match[3]!, match[2]!, match[1]!);
+  if (match) {
+    return build(match[3]!, match[2]!, match[1]!);
+  }
 
   /* Dotted, month and year: 03.2026 */
   match = /^(\d{1,2})[./](\d{4})$/.exec(text);
-  if (match) return build(match[2]!, match[1]!);
+  if (match) {
+    return build(match[2]!, match[1]!);
+  }
 
   /* Bare digits, quoted: "01032026" */
   match = /^(\d{4}|\d{6}|\d{8})$/.exec(text);
-  if (match) return fromDigits(match[1]!);
+  if (match) {
+    return fromDigits(match[1]!);
+  }
 
   return null;
 }

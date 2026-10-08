@@ -60,8 +60,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
    */
   setOverride: (theme) => {
     try {
-      if (theme) localStorage.setItem(STORAGE_KEY, theme);
-      else localStorage.removeItem(STORAGE_KEY);
+      if (theme) {
+        localStorage.setItem(STORAGE_KEY, theme);
+      }
+      else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     } catch {
       /* Storage is optional; the theme still applies for this session. */
     }

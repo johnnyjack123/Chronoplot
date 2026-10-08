@@ -67,7 +67,9 @@ export const LANE_COLUMN = {
 
 /** Width of the lane-name column for this document, on this page. */
 export function laneLabelWidth(doc: TimelineDoc, options: ExportOptions): number {
-  if (!options.repeatLaneLabels) return 0;
+  if (!options.repeatLaneLabels) {
+    return 0;
+  }
   const box = pageBox(options);
   return laneColumnWidth(doc, {
     ...LANE_COLUMN,
@@ -186,7 +188,9 @@ export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
     columns.push({ startX: cursor, endX: end });
     cursor = end;
   }
-  if (columns.length === 0) columns.push({ startX: contentLeft, endX: Math.max(contentRight, 1) });
+  if (columns.length === 0) {
+    columns.push({ startX: contentLeft, endX: Math.max(contentRight, 1) });
+  }
 
   /* ------------------------------------------------------ vertical slices -- */
   const rows: PagePlan["rows"] = [];
@@ -209,7 +213,9 @@ export function planPages(doc: TimelineDoc, options: ExportOptions): PagePlan {
     rows.push({ startY: top, endY: stop ?? limit });
     top = stop ?? limit;
   }
-  if (rows.length === 0) rows.push({ startY: 0, endY: Math.max(built.totalHeight, 1) });
+  if (rows.length === 0) {
+    rows.push({ startY: 0, endY: Math.max(built.totalHeight, 1) });
+  }
 
   return {
     columns,

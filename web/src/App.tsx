@@ -25,11 +25,17 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, ready, needsSetup } = useSessionStore();
   const location = useLocation();
 
-  if (!ready) return <BootScreen />;
+  if (!ready) {
+    return <BootScreen />;
+  }
   // An empty instance has nowhere to sign in to, so send people to set it up
   // rather than to a form none of their credentials can satisfy.
-  if (!user && needsSetup) return <Navigate to="/setup" replace />;
-  if (!user) return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
+  if (!user && needsSetup) {
+    return <Navigate to="/setup" replace />;
+  }
+  if (!user) {
+    return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
+  }
   return <>{children}</>;
 }
 
@@ -43,13 +49,21 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function RedirectIfAuthed({ children, page }: { children: React.ReactNode; page: "signin" | "setup" }) {
   const { user, ready, needsSetup } = useSessionStore();
 
-  if (!ready) return <BootScreen />;
-  if (user) return <Navigate to="/" replace />;
+  if (!ready) {
+    return <BootScreen />;
+  }
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
   // Setup is for an instance with no accounts. Once one exists, the way in is
   // the sign-in form - offering to "create the administrator" again would be a
   // promise the server refuses to keep.
-  if (page === "setup" && !needsSetup) return <Navigate to="/signin" replace />;
-  if (page === "signin" && needsSetup) return <Navigate to="/setup" replace />;
+  if (page === "setup" && !needsSetup) {
+    return <Navigate to="/signin" replace />;
+  }
+  if (page === "signin" && needsSetup) {
+    return <Navigate to="/setup" replace />;
+  }
   return <>{children}</>;
 }
 

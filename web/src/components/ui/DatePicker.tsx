@@ -39,7 +39,9 @@ const blockStart = (value: number, size: number): number => Math.floor(value / s
  */
 export function parseDateInput(raw: string, edge: "start" | "end"): IsoDate | null {
   const text = raw.trim();
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
 
   const pad = (value: string, length = 2): string => value.padStart(length, "0");
   const build = (y: string, m?: string, d?: string): IsoDate | null => {
@@ -48,7 +50,9 @@ export function parseDateInput(raw: string, edge: "start" | "end"): IsoDate | nu
       return edge === "start" ? `${yearPart}-01-01` : `${yearPart}-12-31`;
     }
     const monthPart = pad(m);
-    if (Number(monthPart) < 1 || Number(monthPart) > 12) return null;
+    if (Number(monthPart) < 1 || Number(monthPart) > 12) {
+      return null;
+    }
     if (d === undefined) {
       const iso = `${yearPart}-${monthPart}-01`;
       return edge === "start" ? iso : endOfMonth(iso);
@@ -63,18 +67,26 @@ export function parseDateInput(raw: string, edge: "start" | "end"): IsoDate | nu
 
   // 2126
   let match = /^(\d{1,4})$/.exec(text);
-  if (match) return build(match[1]!);
+  if (match) {
+    return build(match[1]!);
+  }
 
   // 2126-03  or  2126-03-15
   match = /^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/.exec(text);
-  if (match) return build(match[1]!, match[2]!, match[3]);
+  if (match) {
+    return build(match[1]!, match[2]!, match[3]);
+  }
 
   // 03.2126  or  15.03.2126  (also accepts / as the separator)
   match = /^(\d{1,2})[./](\d{4})$/.exec(text);
-  if (match) return build(match[2]!, match[1]!);
+  if (match) {
+    return build(match[2]!, match[1]!);
+  }
 
   match = /^(\d{1,2})[./](\d{1,2})[./](\d{1,4})$/.exec(text);
-  if (match) return build(match[3]!, match[2]!, match[1]!);
+  if (match) {
+    return build(match[3]!, match[2]!, match[1]!);
+  }
 
   return null;
 }
@@ -113,7 +125,9 @@ export function DatePicker({
 
   // Re-anchor whenever the popover opens, so it never reopens on last month.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     setCursor(isValidIso(value) ? value : today());
     setView(precision === "day" ? "day" : precision);
     setText("");
@@ -199,10 +213,14 @@ export function DatePicker({
   const gridRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = gridRef.current;
-    if (!element || !open) return;
+    if (!element || !open) {
+      return;
+    }
 
     const handler = (event: WheelEvent): void => {
-      if (event.deltaY === 0) return;
+      if (event.deltaY === 0) {
+        return;
+      }
       event.preventDefault();
       step(event.deltaY > 0 ? 1 : -1);
     };
@@ -346,7 +364,9 @@ export function DatePicker({
                 type="button"
                 disabled={outOfRange(iso, endOfMonth(iso))}
                 onClick={() => {
-                  if (precision === "month") commit(edge === "start" ? iso : endOfMonth(iso));
+                  if (precision === "month") {
+                    commit(edge === "start" ? iso : endOfMonth(iso));
+                  }
                   else {
                     setCursor(iso);
                     setView("day");
@@ -371,7 +391,9 @@ export function DatePicker({
                   type="button"
                   disabled={outOfRange(iso, endOfYear(iso))}
                   onClick={() => {
-                    if (precision === "year") commit(edge === "start" ? iso : endOfYear(iso));
+                    if (precision === "year") {
+                      commit(edge === "start" ? iso : endOfYear(iso));
+                    }
                     else {
                       setCursor(iso);
                       setView("month");

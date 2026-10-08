@@ -54,7 +54,9 @@ function TitleEditor({
 
   const commit = (): void => {
     const next = draft.trim();
-    if (next && next !== placed.item.title) commands.updateItem(placed.item.id, { title: next });
+    if (next && next !== placed.item.title) {
+      commands.updateItem(placed.item.id, { title: next });
+    }
     setEditing(null);
   };
 
@@ -68,9 +70,13 @@ function TitleEditor({
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation();
-        if (event.key === "Enter") commit();
+        if (event.key === "Enter") {
+          commit();
+        }
         // Escape abandons the edit rather than saving a half-typed title.
-        if (event.key === "Escape") setEditing(null);
+        if (event.key === "Escape") {
+          setEditing(null);
+        }
       }}
       className={cn(
         "min-w-0 rounded-[4px] bg-raised px-1 text-label text-ink outline-none",
@@ -100,7 +106,9 @@ function SourceLink({
   className?: string;
   style?: React.CSSProperties;
 }) {
-  if (!source.url) return null;
+  if (!source.url) {
+    return null;
+  }
   return (
     <a
       href={source.url}
@@ -143,7 +151,9 @@ export const TimelineCard = memo(function TimelineCard({
   };
 
   const beginEdit = (): void => {
-    if (!readOnly) setEditing(item.id);
+    if (!readOnly) {
+      setEditing(item.id);
+    }
   };
 
   /*
@@ -169,7 +179,9 @@ export const TimelineCard = memo(function TimelineCard({
           type="button"
           aria-label={`${item.title}, milestone on ${range}`}
           onPointerDown={(event) => {
-            if (readOnly || event.button !== 0) return;
+            if (readOnly || event.button !== 0) {
+              return;
+            }
             onSelect(item.id, event.shiftKey);
             onDragStart("move", placed, event);
           }}
@@ -218,7 +230,9 @@ export const TimelineCard = memo(function TimelineCard({
         tabIndex={0}
         aria-label={`${item.title}, ${range}`}
         onPointerDown={(event) => {
-          if (readOnly || event.button !== 0) return;
+          if (readOnly || event.button !== 0) {
+            return;
+          }
           onSelect(item.id, event.shiftKey);
           onDragStart("move", placed, event);
         }}
@@ -307,7 +321,9 @@ export const TimelineCard = memo(function TimelineCard({
             role="separator"
             aria-label="Change start date"
             onPointerDown={(event) => {
-              if (event.button !== 0) return;
+              if (event.button !== 0) {
+                return;
+              }
               event.stopPropagation();
               onSelect(item.id, false);
               onDragStart("resize-start", placed, event);
@@ -322,7 +338,9 @@ export const TimelineCard = memo(function TimelineCard({
             role="separator"
             aria-label="Change end date"
             onPointerDown={(event) => {
-              if (event.button !== 0) return;
+              if (event.button !== 0) {
+                return;
+              }
               event.stopPropagation();
               onSelect(item.id, false);
               onDragStart("resize-end", placed, event);
@@ -339,7 +357,9 @@ export const TimelineCard = memo(function TimelineCard({
             type="button"
             aria-label={`Link from ${item.title}`}
             onPointerDown={(event) => {
-              if (event.button !== 0) return;
+              if (event.button !== 0) {
+                return;
+              }
               event.stopPropagation();
               onDragStart("link", placed, event);
             }}

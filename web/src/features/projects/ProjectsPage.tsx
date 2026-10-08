@@ -19,13 +19,21 @@ import { parseProjectFile } from "./project-file";
 
 const relativeTime = (timestamp: number): string => {
   const seconds = Math.round((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) {
+    return "just now";
+  }
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
+  if (hours < 24) {
+    return `${hours} h ago`;
+  }
   const days = Math.round(hours / 24);
-  if (days < 30) return `${days} d ago`;
+  if (days < 30) {
+    return `${days} d ago`;
+  }
   return new Date(timestamp).toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric",
   });
@@ -62,7 +70,9 @@ export function ProjectsPage() {
 
   const create = async (): Promise<void> => {
     const title = newTitle.trim();
-    if (!title) return;
+    if (!title) {
+      return;
+    }
     setBusy(true);
     try {
       const { project } = await api.createProject(title);
@@ -97,7 +107,9 @@ export function ProjectsPage() {
   };
 
   const confirmDelete = async (): Promise<void> => {
-    if (!pendingDelete) return;
+    if (!pendingDelete) {
+      return;
+    }
     setBusy(true);
     try {
       await api.deleteProject(pendingDelete.id);
@@ -178,7 +190,9 @@ export function ProjectsPage() {
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";
-                if (file) void importFile(file);
+                if (file) {
+                  void importFile(file);
+                }
               }}
             />
             <Button size="lg" icon={<UploadIcon />} onClick={() => fileInputRef.current?.click()}>
@@ -300,7 +314,9 @@ export function ProjectsPage() {
               value={newTitle}
               onChange={(event) => setNewTitle(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") void create();
+                if (event.key === "Enter") {
+                  void create();
+                }
               }}
               placeholder="Product roadmap 2026"
             />

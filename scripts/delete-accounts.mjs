@@ -19,11 +19,15 @@ import { existsSync, readFileSync } from "node:fs";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function databasePath() {
-  if (process.env.DATABASE_URL) return resolve(repoRoot, process.env.DATABASE_URL);
+  if (process.env.DATABASE_URL) {
+    return resolve(repoRoot, process.env.DATABASE_URL);
+  }
   const envFile = resolve(repoRoot, ".env");
   if (existsSync(envFile)) {
     const match = /^DATABASE_URL\s*=\s*(.+)$/m.exec(readFileSync(envFile, "utf8"));
-    if (match?.[1]) return resolve(repoRoot, match[1].trim());
+    if (match?.[1]) {
+      return resolve(repoRoot, match[1].trim());
+    }
   }
   return resolve(repoRoot, "data/chronoplot.sqlite");
 }
@@ -65,7 +69,9 @@ if (targets.length === 0) {
 console.log(`${apply ? "Deleting" : "Would delete"} ${targets.length} account(s) from ${file}:\n`);
 for (const target of targets) {
   console.log(`  ${target.email}  (${target.name}, ${target.role})`);
-  for (const title of target.projects) console.log(`      + project "${title}"`);
+  for (const title of target.projects) {
+    console.log(`      + project "${title}"`);
+  }
 }
 
 const remainingAdmins = db
@@ -89,7 +95,9 @@ if (!apply) {
 
 const remove = db.prepare("DELETE FROM users WHERE id = ?");
 const run = db.transaction((rows) => {
-  for (const row of rows) remove.run(row.id);
+  for (const row of rows) {
+    remove.run(row.id);
+  }
 });
 run(targets);
 

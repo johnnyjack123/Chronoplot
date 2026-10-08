@@ -18,21 +18,31 @@ let lastSetCookies = [];
 
 function absorb(res) {
   const raws = res.headers.getSetCookie?.() ?? [];
-  if (raws.length) lastSetCookies = raws;
+  if (raws.length) {
+    lastSetCookies = raws;
+  }
   for (const raw of raws) {
     const [pair] = raw.split(";");
     const idx = pair.indexOf("=");
     const name = pair.slice(0, idx);
     const value = pair.slice(idx + 1);
-    if (value === "") cookies.delete(name);
-    else cookies.set(name, value);
+    if (value === "") {
+      cookies.delete(name);
+    }
+    else {
+      cookies.set(name, value);
+    }
   }
 }
 
 async function call(method, path, body, extraHeaders = {}) {
   const headers = { origin: ORIGIN, ...extraHeaders };
-  if (body !== undefined) headers["content-type"] = "application/json";
-  if (cookies.size) headers.cookie = cookieHeader();
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+  if (cookies.size) {
+    headers.cookie = cookieHeader();
+  }
   // Do not clobber a token the caller deliberately supplied - that is what the
   // bad-token case is testing.
   const csrf = cookies.get("cp_csrf");

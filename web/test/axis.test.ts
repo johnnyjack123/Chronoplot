@@ -11,7 +11,9 @@ import { buildAxis, effectiveUnits, clampZoom, MIN_UNITS_PER_DAY, MAX_UNITS_PER_
 
 let failed = 0;
 function check(label: string, ok: boolean, detail = ""): void {
-  if (!ok) failed++;
+  if (!ok) {
+    failed++;
+  }
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail ? "  " + detail : ""}`);
 }
 

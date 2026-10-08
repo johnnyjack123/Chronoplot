@@ -6,7 +6,9 @@ import { migrate } from "./schema.js";
 let instance: Db | undefined;
 
 export async function getDb(): Promise<Db> {
-  if (instance) return instance;
+  if (instance) {
+    return instance;
+  }
 
   if (config.db.driver === "postgres") {
     instance = await createPostgresDb(config.db.url);

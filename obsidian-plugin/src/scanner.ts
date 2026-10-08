@@ -13,12 +13,16 @@ import type { Binding, OutgoingItem, PluginSettings, ScanResult } from "./types"
 /** A path matches if it is the file itself, or a folder containing it. */
 function matches(filePath: string, pattern: string): boolean {
   const clean = pattern.replace(/^\/+|\/+$/g, "");
-  if (!clean) return true; // An empty pattern means the whole vault.
+  if (!clean) {
+    return true;
+  } // An empty pattern means the whole vault.
   return filePath === clean || filePath.startsWith(`${clean}/`);
 }
 
 export function bindingClaims(binding: Binding, filePath: string): boolean {
-  if (binding.exclude.some((pattern) => matches(filePath, pattern))) return false;
+  if (binding.exclude.some((pattern) => matches(filePath, pattern))) {
+    return false;
+  }
   return binding.include.some((pattern) => matches(filePath, pattern));
 }
 
@@ -35,11 +39,15 @@ export function obsidianUrl(vault: string, filePath: string): string {
 }
 
 function laneFor(binding: Binding, file: TFile, fromProperty: unknown): string | undefined {
-  if (typeof fromProperty === "string" && fromProperty.trim()) return fromProperty.trim();
+  if (typeof fromProperty === "string" && fromProperty.trim()) {
+    return fromProperty.trim();
+  }
 
   if (binding.laneStrategy === "folder") {
     const folder = file.parent?.name;
-    if (folder) return folder;
+    if (folder) {
+      return folder;
+    }
   }
   return binding.defaultLane.trim() || undefined;
 }
@@ -57,21 +65,29 @@ export function scanForBinding(
   const problems: string[] = [];
 
   for (const file of app.vault.getMarkdownFiles()) {
-    if (!bindingClaims(binding, file.path)) continue;
+    if (!bindingClaims(binding, file.path)) {
+      continue;
+    }
 
     const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
-    if (!frontmatter) continue;
+    if (!frontmatter) {
+      continue;
+    }
 
     const rawStart = frontmatter[key("start")];
     // No start property at all is not a problem - most notes are not events.
-    if (rawStart === undefined || rawStart === null || rawStart === "") continue;
+    if (rawStart === undefined || rawStart === null || rawStart === "") {
+      continue;
+    }
 
     const start = parseFrontmatterDate(rawStart);
     if (!start) {
       problems.push(`${file.path}: ${key("start")} is not a date I can read (${String(rawStart)})`);
       continue;
     }
-    if (start.recovered) problems.push(`${file.path}: ${key("start")} ${start.recovered}`);
+    if (start.recovered) {
+      problems.push(`${file.path}: ${key("start")} ${start.recovered}`);
+    }
 
     const rawEnd = frontmatter[key("end")];
     const hasEnd = rawEnd !== undefined && rawEnd !== null && rawEnd !== "";
@@ -81,7 +97,9 @@ export function scanForBinding(
       problems.push(`${file.path}: ${key("end")} is not a date I can read (${String(rawEnd)})`);
       continue;
     }
-    if (end?.recovered) problems.push(`${file.path}: ${key("end")} ${end.recovered}`);
+    if (end?.recovered) {
+      problems.push(`${file.path}: ${key("end")} ${end.recovered}`);
+    }
 
     if (end && end.iso < start.iso) {
       problems.push(`${file.path}: ends before it starts`);
@@ -128,7 +146,9 @@ export function findUnassigned(app: App, settings: PluginSettings): string[] {
     .getMarkdownFiles()
     .filter((file) => {
       const value = app.metadataCache.getFileCache(file)?.frontmatter?.[startKey];
-      if (value === undefined || value === null || value === "") return false;
+      if (value === undefined || value === null || value === "") {
+        return false;
+      }
       return !settings.bindings.some((binding) => bindingClaims(binding, file.path));
     })
     .map((file) => file.path);

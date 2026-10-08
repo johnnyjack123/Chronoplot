@@ -68,7 +68,9 @@ export default class ChronoplotPlugin extends Plugin {
   }
 
   onunload(): void {
-    if (this.timer !== null) window.clearInterval(this.timer);
+    if (this.timer !== null) {
+      window.clearInterval(this.timer);
+    }
   }
 
   restartTimer(): void {
@@ -133,7 +135,9 @@ export default class ChronoplotPlugin extends Plugin {
       }
 
       // Note problems last, so they read as footnotes to the result above.
-      for (const problem of scan.problems) lines.push(`  ${problem}`);
+      for (const problem of scan.problems) {
+        lines.push(`  ${problem}`);
+      }
     }
 
     const orphans = findUnassigned(this.app, this.settings);
@@ -178,7 +182,9 @@ function describe(name: string, result: SyncResponse, scanned: number): string[]
   if (result.lanesCreated.length > 0) {
     lines.push(`  new lanes: ${result.lanesCreated.join(", ")}`);
   }
-  for (const warning of result.warnings) lines.push(`  ${warning}`);
+  for (const warning of result.warnings) {
+    lines.push(`  ${warning}`);
+  }
   return lines;
 }
 

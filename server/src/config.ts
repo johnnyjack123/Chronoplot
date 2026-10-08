@@ -22,13 +22,17 @@ function findRepoRoot(from: string): string {
     if (existsSync(manifest)) {
       try {
         const parsed = JSON.parse(readFileSync(manifest, "utf8")) as { workspaces?: unknown };
-        if (Array.isArray(parsed.workspaces)) return dir;
+        if (Array.isArray(parsed.workspaces)) {
+          return dir;
+        }
       } catch {
         // An unreadable package.json is not the root; keep walking.
       }
     }
     const parent = dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) {
+      break;
+    }
     dir = parent;
   }
   throw new Error(

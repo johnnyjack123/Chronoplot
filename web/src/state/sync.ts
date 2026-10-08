@@ -54,17 +54,25 @@ export function useSyncEngine(enabled: boolean): void {
   const inFlight = useRef(false);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
 
     const push = async (options: { keepalive?: boolean } = {}): Promise<void> => {
       const state = useEditorStore.getState();
       const sync = useSyncStore.getState();
 
-      if (inFlight.current || !state.doc || !state.projectId || !state.dirty) return;
-      if (state.role === "viewer") return;
+      if (inFlight.current || !state.doc || !state.projectId || !state.dirty) {
+        return;
+      }
+      if (state.role === "viewer") {
+        return;
+      }
       // A conflict is a dead end until the user resolves it; retrying would
       // just produce the same 409 forever.
-      if (sync.status === "conflict") return;
+      if (sync.status === "conflict") {
+        return;
+      }
 
       inFlight.current = true;
       const attemptedVersion = state.baseVersion;
@@ -125,13 +133,19 @@ export function useSyncEngine(enabled: boolean): void {
     };
 
     const schedule = (): void => {
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
       timer.current = setTimeout(() => void push(), DEBOUNCE_MS);
     };
 
     const unsubscribe = useEditorStore.subscribe((state, previous) => {
-      if (state.doc === previous.doc && state.title === previous.title) return;
-      if (!state.dirty) return;
+      if (state.doc === previous.doc && state.title === previous.title) {
+        return;
+      }
+      if (!state.dirty) {
+        return;
+      }
       if (useSyncStore.getState().status !== "conflict") {
         useSyncStore.getState().set({ status: "pending" });
       }
@@ -144,12 +158,16 @@ export function useSyncEngine(enabled: boolean): void {
      * debounce. `keepalive` lets the request outlive the page.
      */
     const flush = (): void => {
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
       void push({ keepalive: true });
     };
 
     const onVisibility = (): void => {
-      if (document.visibilityState === "hidden") flush();
+      if (document.visibilityState === "hidden") {
+        flush();
+      }
     };
 
     document.addEventListener("visibilitychange", onVisibility);
@@ -159,7 +177,9 @@ export function useSyncEngine(enabled: boolean): void {
       unsubscribe();
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", flush);
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
       flush();
     };
   }, [enabled]);
@@ -168,7 +188,9 @@ export function useSyncEngine(enabled: boolean): void {
 /** Discards local edits and takes the server's version of the project. */
 export function resolveConflictWithServer(): void {
   const { conflict } = useSyncStore.getState();
-  if (!conflict) return;
+  if (!conflict) {
+    return;
+  }
   useEditorStore.getState().adoptServerDocument(conflict.doc, conflict.currentVersion, conflict.title);
   useSyncStore.getState().clearConflict();
 }
@@ -180,7 +202,9 @@ export function resolveConflictWithServer(): void {
  */
 export function resolveConflictWithLocal(): void {
   const { conflict } = useSyncStore.getState();
-  if (!conflict) return;
+  if (!conflict) {
+    return;
+  }
   useEditorStore.setState({ baseVersion: conflict.currentVersion, dirty: true });
   useSyncStore.getState().clearConflict();
 }

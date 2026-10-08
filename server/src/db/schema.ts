@@ -164,7 +164,9 @@ export async function migrate(db: Db, envAllowsRegistration = true): Promise<voi
     const oldest = await db.get<{ id: string }>(
       `SELECT id FROM users ORDER BY created_at ASC LIMIT 1`,
     );
-    if (oldest) await db.run(`UPDATE users SET role = 'admin' WHERE id = ?`, [oldest.id]);
+    if (oldest) {
+      await db.run(`UPDATE users SET role = 'admin' WHERE id = ?`, [oldest.id]);
+    }
   }
 
   // Seed the registration setting so the row exists from the first boot rather

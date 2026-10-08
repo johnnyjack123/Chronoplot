@@ -37,7 +37,9 @@ export function AccountDialog({
   const [tab, setTab] = useState<Tab>("profile");
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     setTab("profile");
     setName(user?.name ?? "");
     setCurrentPassword("");
@@ -49,7 +51,9 @@ export function AccountDialog({
 
   const saveName = async (): Promise<void> => {
     const trimmed = name.trim();
-    if (!trimmed || trimmed === user?.name) return;
+    if (!trimmed || trimmed === user?.name) {
+      return;
+    }
     setNameState({ busy: true });
     try {
       const result = await api.updateProfile(trimmed);
@@ -114,7 +118,9 @@ export function AccountDialog({
                   setNameState({});
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") void saveName();
+                  if (event.key === "Enter") {
+                    void saveName();
+                  }
                 }}
               />
             )}

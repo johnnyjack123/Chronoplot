@@ -48,7 +48,9 @@ export function AdminDialog({
   }, []);
 
   useEffect(() => {
-    if (open) void reload();
+    if (open) {
+      void reload();
+    }
   }, [open, reload]);
 
   const guard = async (action: () => Promise<unknown>): Promise<void> => {
@@ -270,7 +272,9 @@ export function AdminDialog({
               disabled={resetPassword.length < 10}
               onClick={() =>
                 void guard(async () => {
-                  if (resetting) await api.adminResetPassword(resetting.id, resetPassword);
+                  if (resetting) {
+                    await api.adminResetPassword(resetting.id, resetPassword);
+                  }
                   setResetting(null);
                   setResetPassword("");
                 })
@@ -307,7 +311,9 @@ export function AdminDialog({
               loading={busy}
               onClick={() =>
                 void guard(async () => {
-                  if (pendingDelete) await api.adminDeleteUser(pendingDelete.id);
+                  if (pendingDelete) {
+                    await api.adminDeleteUser(pendingDelete.id);
+                  }
                   setPendingDelete(null);
                 })
               }

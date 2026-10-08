@@ -183,8 +183,12 @@ export function formatWeekdayInitial(date: IsoDate): string {
  * item says "Mar 2026", not "1 Mar 2026", because the day was never meaningful.
  */
 export function formatWithPrecision(date: IsoDate, precision: "day" | "month" | "year"): string {
-  if (precision === "year") return date.slice(0, 4);
-  if (precision === "month") return formatter({ month: "short", year: "numeric" }).format(toTime(date));
+  if (precision === "year") {
+    return date.slice(0, 4);
+  }
+  if (precision === "month") {
+    return formatter({ month: "short", year: "numeric" }).format(toTime(date));
+  }
   return formatDate(date);
 }
 

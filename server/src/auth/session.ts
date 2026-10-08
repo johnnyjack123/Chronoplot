@@ -52,7 +52,9 @@ export async function resolveSession(
   db: Db,
   token: string | undefined,
 ): Promise<SessionUser | undefined> {
-  if (!token) return undefined;
+  if (!token) {
+    return undefined;
+  }
 
   const id = digestToken(token);
   const row = await db.get<SessionRow & UserRow>(
@@ -63,7 +65,9 @@ export async function resolveSession(
       WHERE s.id = ?`,
     [id],
   );
-  if (!row) return undefined;
+  if (!row) {
+    return undefined;
+  }
 
   const expiresAt = Number((row as unknown as { expires_at: number }).expires_at);
   if (expiresAt <= Date.now()) {
@@ -88,7 +92,9 @@ export async function resolveSession(
 }
 
 export async function destroySession(db: Db, token: string | undefined): Promise<void> {
-  if (!token) return;
+  if (!token) {
+    return;
+  }
   await db.run(`DELETE FROM sessions WHERE id = ?`, [digestToken(token)]);
 }
 

@@ -46,7 +46,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
                              WHERE m.project_id = p.id AND m.user_id = ?))`,
         [body.projectId, user.id, user.id],
       );
-      if (!reachable) throw new HttpError(404, "not_found", "Project not found.");
+      if (!reachable) {
+        throw new HttpError(404, "not_found", "Project not found.");
+      }
     }
 
     const created = await createApiToken(db, {

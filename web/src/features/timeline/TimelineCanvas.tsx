@@ -94,7 +94,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
   useLayoutEffect(() => {
     const element = scrollRef.current;
-    if (!element) return;
+    if (!element) {
+      return;
+    }
 
     let frame = 0;
     const measure = (): void => {
@@ -110,7 +112,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
     };
     // Coalesce to one measurement per frame; scroll fires far more often.
     const schedule = (): void => {
-      if (frame === 0) frame = requestAnimationFrame(measure);
+      if (frame === 0) {
+        frame = requestAnimationFrame(measure);
+      }
     };
 
     measure();
@@ -119,7 +123,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
     observer.observe(element);
 
     return () => {
-      if (frame !== 0) cancelAnimationFrame(frame);
+      if (frame !== 0) {
+        cancelAnimationFrame(frame);
+      }
       element.removeEventListener("scroll", schedule);
       observer.disconnect();
     };
@@ -186,10 +192,14 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
   const onPlotPointerDown = useCallback(
     (event: ReactPointerEvent) => {
-      if (readOnly || event.button !== 0) return;
+      if (readOnly || event.button !== 0) {
+        return;
+      }
       // Only an empty part of the plot starts a create-drag; cards handle their
       // own pointer events and stop propagation implicitly by being on top.
-      if (event.target !== event.currentTarget) return;
+      if (event.target !== event.currentTarget) {
+        return;
+      }
 
       const point = localPoint(event);
       const lane = laneAtY(layout, point.y);
@@ -212,7 +222,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
   const onPlotPointerMove = useCallback(
     (event: ReactPointerEvent) => {
-      if (!drag) return;
+      if (!drag) {
+        return;
+      }
       const point = localPoint(event);
 
       if (drag.kind === "link") {
@@ -234,12 +246,16 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           doc.settings.start,
           doc.settings.end,
         );
-        if (date !== drag.current) setDrag({ ...drag, current: date });
+        if (date !== drag.current) {
+          setDrag({ ...drag, current: date });
+        }
         return;
       }
 
       const item = doc.items.find((candidate) => candidate.id === drag.itemId);
-      if (!item) return;
+      if (!item) {
+        return;
+      }
 
       const deltaDays = Math.round((event.clientX - drag.pointerStartX) / unitsPerDay);
       const snapTargets = snapping ? collectSnapTargets(doc, drag.itemId) : [];
@@ -261,7 +277,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
             ? moved
             : { start: addDays(moved.start, snap.days), end: addDays(moved.end, snap.days) };
 
-        if (drag.snappedTo !== snap.target) setDrag({ ...drag, snappedTo: snap.target });
+        if (drag.snappedTo !== snap.target) {
+          setDrag({ ...drag, snappedTo: snap.target });
+        }
         const bounded = clampToWindow(snapped.start, snapped.end, doc.settings.start, doc.settings.end);
 
         // Dragging vertically re-parents the card into whichever lane the
@@ -303,7 +321,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
               home ? drag.originSubLane ?? null : target,
               `move:${drag.itemId}`,
             );
-            if (!drag.steered) setDrag({ ...drag, steered: true });
+            if (!drag.steered) {
+              setDrag({ ...drag, steered: true });
+            }
           }
         }
         return;
@@ -312,7 +332,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
       if (drag.kind === "resize-start") {
         const raw = addDays(drag.originStart, deltaDays);
         const snap = snapOffsetDays([raw], snapTargets, unitsPerDay);
-        if (drag.snappedTo !== snap.target) setDrag({ ...drag, snappedTo: snap.target });
+        if (drag.snappedTo !== snap.target) {
+          setDrag({ ...drag, snappedTo: snap.target });
+        }
 
         const next = clampDate(
           snapToPrecision(addDays(raw, snap.days), item.precision, "start"),
@@ -327,7 +349,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
       // The trailing edge sits a day before the target, so two cards butt up
       // against each other rather than overlapping by one day.
       const endSnap = snapOffsetDays([addDays(raw, 1)], snapTargets, unitsPerDay);
-      if (drag.snappedTo !== endSnap.target) setDrag({ ...drag, snappedTo: endSnap.target });
+      if (drag.snappedTo !== endSnap.target) {
+        setDrag({ ...drag, snappedTo: endSnap.target });
+      }
       const aligned = addDays(raw, endSnap.days);
       const next = clampDate(
         snapToPrecision(aligned, item.precision, "end"),
@@ -341,11 +365,15 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
   const onPlotPointerUp = useCallback(
     (event: ReactPointerEvent) => {
-      if (!drag) return;
+      if (!drag) {
+        return;
+      }
       plotRef.current?.releasePointerCapture(event.pointerId);
 
       if (drag.kind === "link") {
-        if (drag.overItemId) commands.linkItems(drag.fromId, drag.overItemId);
+        if (drag.overItemId) {
+          commands.linkItems(drag.fromId, drag.overItemId);
+        }
       } else if (drag.kind === "create") {
         const start = drag.anchor <= drag.current ? drag.anchor : drag.current;
         const end = drag.anchor <= drag.current ? drag.current : drag.anchor;
@@ -380,16 +408,22 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
    */
   const onWheel = useCallback(
     (event: ReactWheelEvent) => {
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!event.ctrlKey && !event.metaKey) {
+        return;
+      }
       event.preventDefault();
 
       const container = scrollRef.current;
       const plot = plotRef.current;
-      if (!container || !plot) return;
+      if (!container || !plot) {
+        return;
+      }
 
       const pointerPlotX = event.clientX - plot.getBoundingClientRect().left;
       const next = clampZoom(unitsPerDay * Math.exp(-event.deltaY * 0.0015));
-      if (next === unitsPerDay) return;
+      if (next === unitsPerDay) {
+        return;
+      }
 
       setZoom(next);
       // Keep the day under the cursor under the cursor.
@@ -403,9 +437,13 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
   // the zoom handler has to be registered directly.
   useEffect(() => {
     const element = scrollRef.current;
-    if (!element) return;
+    if (!element) {
+      return;
+    }
     const handler = (event: WheelEvent): void => {
-      if (event.ctrlKey || event.metaKey) event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+      }
     };
     element.addEventListener("wheel", handler, { passive: false });
     return () => element.removeEventListener("wheel", handler);
@@ -424,7 +462,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
 
   const animateView = useCallback((toZoom: number, toScrollLeft: number) => {
     const container = scrollRef.current;
-    if (!container) return;
+    if (!container) {
+      return;
+    }
     cancelAnimationFrame(animation.current);
 
     const fromZoom = useEditorStore.getState().unitsPerDay;
@@ -444,7 +484,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
       const eased = 1 - Math.pow(1 - t, 3);
       useEditorStore.getState().setZoom(fromZoom * Math.pow(toZoom / fromZoom, eased));
       container.scrollLeft = fromScroll + (toScrollLeft - fromScroll) * eased;
-      if (t < 1) animation.current = requestAnimationFrame(step);
+      if (t < 1) {
+        animation.current = requestAnimationFrame(step);
+      }
     };
     animation.current = requestAnimationFrame(step);
   }, []);
@@ -470,7 +512,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
   const fittedProject = useRef<string | null>(null);
   useEffect(() => {
     const container = scrollRef.current;
-    if (!container || !projectId || fittedProject.current === projectId) return;
+    if (!container || !projectId || fittedProject.current === projectId) {
+      return;
+    }
 
     fittedProject.current = projectId;
     // A frame later, so the container has been laid out and measured.
@@ -484,9 +528,13 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
   }, [projectId]);
 
   useEffect(() => {
-    if (!viewCommand) return;
+    if (!viewCommand) {
+      return;
+    }
     const container = scrollRef.current;
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     const available = Math.max(200, container.clientWidth - SIDEBAR_WIDTH);
     if (viewCommand.zoom === "fit") {
@@ -512,7 +560,9 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
           const start = drag.anchor <= drag.current ? drag.anchor : drag.current;
           const end = drag.anchor <= drag.current ? drag.current : drag.anchor;
           const lane = layout.lanes.find((candidate) => candidate.rowId === drag.rowId);
-          if (!lane) return null;
+          if (!lane) {
+            return null;
+          }
           // `left`/`top`, not `x`/`y`: these go straight into a style object,
           // and x/y are not CSS properties - an absolutely positioned box with
           // neither left nor top falls back to its static position, which put
@@ -793,7 +843,9 @@ function InlineName({
 
   const commit = (): void => {
     const next = draft.trim();
-    if (next && next !== value) onCommit(next);
+    if (next && next !== value) {
+      onCommit(next);
+    }
     setEditing(null);
   };
 
@@ -806,8 +858,12 @@ function InlineName({
       onPointerDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation();
-        if (event.key === "Enter") commit();
-        if (event.key === "Escape") setEditing(null);
+        if (event.key === "Enter") {
+          commit();
+        }
+        if (event.key === "Escape") {
+          setEditing(null);
+        }
       }}
       className={cn(
         "min-w-0 flex-1 rounded-sm bg-sunken px-1.5 py-1 text-label text-ink",
@@ -836,7 +892,9 @@ function SubLaneCounter({
   options: LayoutOptions;
   readOnly: boolean;
 }) {
-  if (readOnly) return null;
+  if (readOnly) {
+    return null;
+  }
 
   const removable = canRemoveSubLane(lane, options);
   const quiet = lane.subLanes <= 1;
@@ -926,7 +984,9 @@ function LaneList({
       } else {
         // An empty group still needs somewhere to drop into.
         const placed = layout.groups.find((group) => group.groupId === context);
-        if (placed) slots.push({ y: placed.y + placed.height, groupId: context, beforeRowId: null });
+        if (placed) {
+          slots.push({ y: placed.y + placed.height, groupId: context, beforeRowId: null });
+        }
       }
     }
     return slots;
@@ -938,7 +998,9 @@ function LaneList({
       beforeGroupId: group.groupId,
     }));
     const last = layout.groups[layout.groups.length - 1];
-    if (last) slots.push({ y: last.y + last.height, beforeGroupId: null });
+    if (last) {
+      slots.push({ y: last.y + last.height, beforeGroupId: null });
+    }
     return slots;
   }, [layout.groups]);
 
@@ -952,7 +1014,9 @@ function LaneList({
     );
 
   const startDrag = (kind: "row" | "group", id: string) => (event: ReactPointerEvent) => {
-    if (readOnly || event.button !== 0) return;
+    if (readOnly || event.button !== 0) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     listRef.current?.setPointerCapture(event.pointerId);
@@ -960,7 +1024,9 @@ function LaneList({
   };
 
   const onPointerMove = (event: ReactPointerEvent): void => {
-    if (!drag) return;
+    if (!drag) {
+      return;
+    }
     const y = localY(event.clientY);
     setDrag(
       drag.kind === "row"
@@ -970,7 +1036,9 @@ function LaneList({
   };
 
   const onPointerUp = (event: ReactPointerEvent): void => {
-    if (!drag) return;
+    if (!drag) {
+      return;
+    }
     listRef.current?.releasePointerCapture(event.pointerId);
 
     if (drag.kind === "row" && drag.slot) {

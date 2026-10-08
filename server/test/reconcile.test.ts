@@ -11,7 +11,9 @@ import { reconcile } from "../src/sync-source.js";
 
 let failed = 0;
 function check(label: string, ok: boolean, detail = ""): void {
-  if (!ok) failed++;
+  if (!ok) {
+    failed++;
+  }
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail ? "  " + detail : ""}`);
 }
 

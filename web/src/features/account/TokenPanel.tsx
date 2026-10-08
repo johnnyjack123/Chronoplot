@@ -58,7 +58,9 @@ export function TokenPanel() {
 
   const create = async (): Promise<void> => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -91,7 +93,9 @@ export function TokenPanel() {
   };
 
   const copy = async (): Promise<void> => {
-    if (!fresh) return;
+    if (!fresh) {
+      return;
+    }
     try {
       await navigator.clipboard.writeText(fresh);
       setCopied(true);
@@ -142,7 +146,9 @@ export function TokenPanel() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") void create();
+                if (event.key === "Enter") {
+                  void create();
+                }
               }}
             />
           )}

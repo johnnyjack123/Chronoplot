@@ -243,7 +243,9 @@ export function effectiveUnits(
   let lowerIndex = startIndex;
   while (lowerIndex < maxLower) {
     const stepper = STEPPERS[UNIT_ORDER[lowerIndex]!]!;
-    if (stepper.approxDays * unitsPerDay >= stepper.minSize * sizeScale) break;
+    if (stepper.approxDays * unitsPerDay >= stepper.minSize * sizeScale) {
+      break;
+    }
     lowerIndex += 1;
   }
 
@@ -297,7 +299,9 @@ function buildTier(
       });
     }
     const next = stepper.next(cursor);
-    if (next <= cursor) break; // Refuse to spin if a stepper fails to advance.
+    if (next <= cursor) {
+      break;
+    } // Refuse to spin if a stepper fails to advance.
     cursor = next;
   }
   return ticks;
@@ -602,8 +606,12 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
   const itemsByRow = new Map<string, Item[]>();
   for (const item of doc.items) {
     const bucket = itemsByRow.get(item.rowId);
-    if (bucket) bucket.push(item);
-    else itemsByRow.set(item.rowId, [item]);
+    if (bucket) {
+      bucket.push(item);
+    }
+    else {
+      itemsByRow.set(item.rowId, [item]);
+    }
   }
   for (const bucket of itemsByRow.values()) {
     bucket.sort((a, b) => (a.start === b.start ? a.end.localeCompare(b.end) : a.start.localeCompare(b.start)));
@@ -664,7 +672,9 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
 
   // Ungrouped rows render first, in document order, above every group.
   for (const row of doc.rows) {
-    if (row.groupId === null) emitLane(row);
+    if (row.groupId === null) {
+      emitLane(row);
+    }
   }
 
   for (const group of doc.groups) {
@@ -673,7 +683,9 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
 
     y += groupHeaderHeight;
     if (!group.collapsed) {
-      for (const row of members) emitLane(row);
+      for (const row of members) {
+        emitLane(row);
+      }
     }
 
     groups.push({
@@ -796,7 +808,9 @@ export function laneColumnWidth(doc: TimelineDoc, options: LaneColumnOptions): n
 
   let widest = 0;
   for (const row of doc.rows) {
-    if (row.groupId !== null && collapsed.has(row.groupId)) continue;
+    if (row.groupId !== null && collapsed.has(row.groupId)) {
+      continue;
+    }
     const indent = row.groupId !== null ? options.indent : 0;
     widest = Math.max(widest, indent + row.title.length * options.charWidth);
   }
@@ -811,7 +825,9 @@ export function laneColumnWidth(doc: TimelineDoc, options: LaneColumnOptions): n
 export function findPlacedItem(layoutResult: Layout, itemId: string): PlacedItem | undefined {
   for (const lane of layoutResult.lanes) {
     const found = lane.items.find((placed) => placed.item.id === itemId);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -863,11 +879,15 @@ export function collectSnapTargets(doc: TimelineDoc, excludeItemId?: string): Is
   const targets = new Set<IsoDate>([doc.settings.start, addDays(doc.settings.end, 1)]);
 
   for (const item of doc.items) {
-    if (item.id === excludeItemId) continue;
+    if (item.id === excludeItemId) {
+      continue;
+    }
     targets.add(item.start);
     targets.add(addDays(item.end, 1));
   }
-  if (doc.settings.showToday) targets.add(todayIso());
+  if (doc.settings.showToday) {
+    targets.add(todayIso());
+  }
 
   return [...targets];
 }
@@ -918,7 +938,9 @@ export function clampToWindow(
 ): { start: IsoDate; end: IsoDate } {
   const span = daysBetween(start, end);
   let nextStart = start;
-  if (nextStart < windowStart) nextStart = windowStart;
+  if (nextStart < windowStart) {
+    nextStart = windowStart;
+  }
   let nextEnd = addDays(nextStart, span);
   if (nextEnd > windowEnd) {
     nextEnd = windowEnd;
@@ -930,7 +952,9 @@ export function clampToWindow(
 
 /** Where the "today" marker sits, or null when it is outside the window. */
 export function todayX(doc: TimelineDoc, unitsPerDay: number, todayIso: IsoDate): number | null {
-  if (todayIso < doc.settings.start || todayIso > doc.settings.end) return null;
+  if (todayIso < doc.settings.start || todayIso > doc.settings.end) {
+    return null;
+  }
   return xOf(todayIso, doc.settings.start, unitsPerDay);
 }
 

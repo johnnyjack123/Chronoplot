@@ -62,7 +62,9 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
 
   app.addHook("onRequest", async (request: FastifyRequest) => {
     const token = request.cookies[SESSION_COOKIE];
-    if (!token) return;
+    if (!token) {
+      return;
+    }
 
     const db = await getDb();
     const user = await resolveSession(db, token);
@@ -84,11 +86,15 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
    * so a browser cannot be talked into using a token it happens to have.
    */
   app.addHook("onRequest", async (request: FastifyRequest) => {
-    if (request.user) return;
+    if (request.user) {
+      return;
+    }
 
     const db = await getDb();
     const bearer = await resolveApiToken(db, request.headers.authorization);
-    if (!bearer) return;
+    if (!bearer) {
+      return;
+    }
 
     request.user = {
       id: bearer.id,
@@ -111,8 +117,12 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
    * to forge yet, and are covered by rate limiting instead.
    */
   app.addHook("onRequest", async (request: FastifyRequest) => {
-    if (!MUTATING.has(request.method)) return;
-    if (!request.sessionToken) return;
+    if (!MUTATING.has(request.method)) {
+      return;
+    }
+    if (!request.sessionToken) {
+      return;
+    }
 
     const origin = request.headers.origin;
     if (origin && origin !== config.appOrigin) {

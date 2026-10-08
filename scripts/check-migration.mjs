@@ -25,7 +25,9 @@ const copy = resolve(repoRoot, copyArg ?? "backups/migration-rehearsal.sqlite");
 
 if (phase === "copy") {
   for (const suffix of ["", "-wal", "-shm"]) {
-    if (existsSync(copy + suffix)) rmSync(copy + suffix);
+    if (existsSync(copy + suffix)) {
+      rmSync(copy + suffix);
+    }
   }
 
   const db = new Database(source, { readonly: false });
@@ -84,7 +86,9 @@ const checks = [
 console.log("");
 let failed = 0;
 for (const [label, ok] of checks) {
-  if (!ok) failed++;
+  if (!ok) {
+    failed++;
+  }
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}`);
 }
 

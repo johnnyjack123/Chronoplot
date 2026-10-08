@@ -99,7 +99,9 @@ function readPalette(theme: ThemeName) {
 
 function describe(placed: PlacedItem): string {
   const { item } = placed;
-  if (item.kind === "milestone") return formatWithPrecision(item.start, item.precision);
+  if (item.kind === "milestone") {
+    return formatWithPrecision(item.start, item.precision);
+  }
   const days = inclusiveDays(item.start, item.end);
   return `${formatWithPrecision(item.start, item.precision)} – ${formatWithPrecision(item.end, item.precision)} · ${days} day${days === 1 ? "" : "s"}`;
 }
@@ -298,7 +300,9 @@ function render(doc: TimelineDoc, options: HtmlExportOptions, mode: "html" | "sv
           .map((link) => {
             const from = findPlacedItem(layout, link.fromId);
             const to = findPlacedItem(layout, link.toId);
-            if (!from || !to) return "";
+            if (!from || !to) {
+              return "";
+            }
             return `<path d="${linkPath(from, to)}" fill="none" stroke="${inkSubtle}" stroke-width="1.5" marker-end="url(#cp-arrow)"/>`;
           })
           .join("")
@@ -618,7 +622,9 @@ export async function exportPng(
   const svg = buildSvg(doc, options);
   const { width, height } = pngSize(doc, options, scale);
 
-  if (width <= 0 || height <= 0) throw new Error("The timeline has no drawable area.");
+  if (width <= 0 || height <= 0) {
+    throw new Error("The timeline has no drawable area.");
+  }
   // Browsers refuse canvases beyond roughly this, and fail by returning a blank
   // image rather than by throwing - so say what happened instead.
   if (width > 16384 || height > 16384) {
@@ -641,13 +647,17 @@ export async function exportPng(
   canvasEl.width = width;
   canvasEl.height = height;
   const context = canvasEl.getContext("2d");
-  if (!context) throw new Error("This browser provided no 2D canvas context.");
+  if (!context) {
+    throw new Error("This browser provided no 2D canvas context.");
+  }
 
   // Nothing is painted first, so an omitted background rect stays transparent.
   context.drawImage(image, 0, 0, width, height);
 
   const blob = await new Promise<Blob | null>((resolve) => canvasEl.toBlob(resolve, "image/png"));
-  if (!blob) throw new Error("The image could not be encoded.");
+  if (!blob) {
+    throw new Error("The image could not be encoded.");
+  }
 
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

@@ -58,7 +58,9 @@ function parseColor(css: string): Rgba | null {
   if (fn?.[1]) {
     const [rgbPart, alphaPart] = fn[1].split("/");
     const parts = (rgbPart ?? "").trim().split(/[\s,]+/).filter(Boolean);
-    if (parts.length < 3) return null;
+    if (parts.length < 3) {
+      return null;
+    }
     const alpha = alphaPart !== undefined ? Number(alphaPart) : parts[3] !== undefined ? Number(parts[3]) : 1;
     return {
       r: Number(parts[0]),
@@ -77,8 +79,12 @@ const toHex = (value: number): string =>
 /** Flattens `color` onto `background`, returning an opaque `#rrggbb`. */
 function flatten(color: string, background: Rgba, fallback: string): string {
   const parsed = parseColor(color);
-  if (!parsed) return fallback;
-  if (parsed.a >= 1) return `#${toHex(parsed.r)}${toHex(parsed.g)}${toHex(parsed.b)}`;
+  if (!parsed) {
+    return fallback;
+  }
+  if (parsed.a >= 1) {
+    return `#${toHex(parsed.r)}${toHex(parsed.g)}${toHex(parsed.b)}`;
+  }
 
   const mix = (channel: keyof Omit<Rgba, "a">): number =>
     parsed[channel] * parsed.a + background[channel] * (1 - parsed.a);
@@ -90,7 +96,9 @@ const WHITE: Rgba = { r: 255, g: 255, b: 255, a: 1 };
 /** Blends two opaque colours, `amount` being how much of `a` shows through. */
 function mix(a: string, b: Rgba, amount: number): string {
   const parsed = parseColor(a);
-  if (!parsed) return `#${toHex(b.r)}${toHex(b.g)}${toHex(b.b)}`;
+  if (!parsed) {
+    return `#${toHex(b.r)}${toHex(b.g)}${toHex(b.b)}`;
+  }
   const channel = (key: "r" | "g" | "b"): number => parsed[key] * amount + b[key] * (1 - amount);
   return `#${toHex(channel("r"))}${toHex(channel("g"))}${toHex(channel("b"))}`;
 }
@@ -116,15 +124,23 @@ function readPalette(theme: ThemeName) {
 
 /** Trims text with an ellipsis so it never runs past its box. */
 function fit(pdf: JsPdfType, text: string, maxWidth: number): string {
-  if (maxWidth <= 2) return "";
-  if (pdf.getTextWidth(text) <= maxWidth) return text;
+  if (maxWidth <= 2) {
+    return "";
+  }
+  if (pdf.getTextWidth(text) <= maxWidth) {
+    return text;
+  }
 
   let low = 0;
   let high = text.length;
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
-    if (pdf.getTextWidth(`${text.slice(0, mid)}…`) <= maxWidth) low = mid;
-    else high = mid - 1;
+    if (pdf.getTextWidth(`${text.slice(0, mid)}…`) <= maxWidth) {
+      low = mid;
+    }
+    else {
+      high = mid - 1;
+    }
   }
   return low > 0 ? `${text.slice(0, low)}…` : "";
 }
@@ -184,7 +200,9 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
 
     for (const rowSlice of plan.rows) {
       for (const column of plan.columns) {
-        if (pageIndex > 0) pdf.addPage([box.width, box.height], options.orientation);
+        if (pageIndex > 0) {
+          pdf.addPage([box.width, box.height], options.orientation);
+        }
         pageIndex += 1;
 
         const sliceWidth = column.endX - column.startX;
@@ -200,9 +218,13 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
          * sit on top of them rather than being painted over.
          */
         for (const lane of built.lanes) {
-          if (lane.color === undefined) continue;
+          if (lane.color === undefined) {
+            continue;
+          }
           const top = lane.y - rowSlice.startY;
-          if (top + lane.height <= 0 || top >= sliceHeight) continue;
+          if (top + lane.height <= 0 || top >= sliceHeight) {
+            continue;
+          }
 
           const clippedTop = Math.max(0, top);
           pdf.setFillColor(mix(palette.cardHex(lane.color), pageBackground, LANE_TINT_STRENGTH));
@@ -226,7 +248,9 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
         pdf.setFontSize(7);
         for (const tick of axis.upper) {
           const left = tick.x - column.startX;
-          if (left + tick.width <= 0 || left >= sliceWidth) continue;
+          if (left + tick.width <= 0 || left >= sliceWidth) {
+            continue;
+          }
 
           const visibleLeft = Math.max(0, left);
           const visibleRight = Math.min(sliceWidth, left + tick.width);
@@ -246,7 +270,9 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
         pdf.setFontSize(6);
         for (const tick of axis.lower) {
           const left = tick.x - column.startX;
-          if (left + tick.width <= 0 || left >= sliceWidth) continue;
+          if (left + tick.width <= 0 || left >= sliceWidth) {
+            continue;
+          }
 
           const visibleLeft = Math.max(0, left);
           const visibleRight = Math.min(sliceWidth, left + tick.width);
@@ -282,7 +308,9 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
 
         /* ------------------------------------------------ group headings -- */
         for (const group of built.groups) {
-          if (group.y < rowSlice.startY || group.y >= rowSlice.endY) continue;
+          if (group.y < rowSlice.startY || group.y >= rowSlice.endY) {
+            continue;
+          }
           pdf.setFontSize(7);
           pdf.setFont("helvetica", "bold");
           pdf.setTextColor(inkMuted);
@@ -297,7 +325,9 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
         /* ------------------------------------------------ lanes and cards -- */
         for (const lane of built.lanes) {
           const top = lane.y - rowSlice.startY;
-          if (top + lane.height <= 0 || top >= sliceHeight) continue;
+          if (top + lane.height <= 0 || top >= sliceHeight) {
+            continue;
+          }
 
           const separatorY = plotTop + top + lane.height;
           if (separatorY <= plotTop + sliceHeight + 0.01) {
@@ -319,10 +349,14 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
           for (const placed of lane.items) {
             const left = placed.x - column.startX;
             const right = left + placed.width;
-            if (right <= 0 || left >= sliceWidth) continue;
+            if (right <= 0 || left >= sliceWidth) {
+              continue;
+            }
 
             const y = plotTop + (placed.y - rowSlice.startY);
-            if (y + placed.height <= plotTop || y >= plotTop + sliceHeight) continue;
+            if (y + placed.height <= plotTop || y >= plotTop + sliceHeight) {
+              continue;
+            }
 
             pdf.setFillColor(cardFillHex(placed.item.color));
 
@@ -360,7 +394,9 @@ export async function buildPdf(doc: TimelineDoc, options: ExportOptions): Promis
             const clippedLeft = Math.max(0, left);
             const clippedRight = Math.min(sliceWidth, right);
             const width = clippedRight - clippedLeft;
-            if (width <= 0.05) continue;
+            if (width <= 0.05) {
+              continue;
+            }
 
             pdf.roundedRect(plotLeft + clippedLeft, y, width, placed.height, 1.2, 1.2, "F");
 

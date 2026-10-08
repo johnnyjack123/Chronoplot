@@ -63,7 +63,9 @@ export function resolveCardInkHex(slot: number, root: HTMLElement = document.doc
 export const LANE_TINT_STRENGTH = 0.24;
 
 export function laneTint(slot: number | undefined): string | undefined {
-  if (slot === undefined) return undefined;
+  if (slot === undefined) {
+    return undefined;
+  }
   return `color-mix(in oklab, ${cardFill(slot)} ${LANE_TINT_STRENGTH * 100}%, transparent)`;
 }
 

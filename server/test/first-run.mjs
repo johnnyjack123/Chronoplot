@@ -27,17 +27,27 @@ function absorb(response) {
     const index = pair.indexOf("=");
     const name = pair.slice(0, index);
     const value = pair.slice(index + 1);
-    if (value === "") cookies.delete(name);
-    else cookies.set(name, value);
+    if (value === "") {
+      cookies.delete(name);
+    }
+    else {
+      cookies.set(name, value);
+    }
   }
 }
 
 async function call(method, path, body) {
   const headers = { origin: ORIGIN };
-  if (body !== undefined) headers["content-type"] = "application/json";
-  if (cookies.size) headers.cookie = cookieHeader();
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+  if (cookies.size) {
+    headers.cookie = cookieHeader();
+  }
   const csrf = cookies.get("cp_csrf");
-  if (csrf && method !== "GET") headers["x-csrf-token"] = csrf;
+  if (csrf && method !== "GET") {
+    headers["x-csrf-token"] = csrf;
+  }
 
   const response = await fetch(`${BASE}${path}`, {
     method,
@@ -57,7 +67,9 @@ async function call(method, path, body) {
 
 let failed = 0;
 const check = (label, ok, detail = "") => {
-  if (!ok) failed++;
+  if (!ok) {
+    failed++;
+  }
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail ? "  " + detail : ""}`);
 };
 

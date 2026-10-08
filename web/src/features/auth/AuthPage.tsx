@@ -27,7 +27,9 @@ export function AuthPage() {
   }
   // Reaching sign-in on an instance with no accounts, by a bookmark or a typed
   // URL, should still land on the page that can actually do something.
-  if (ready && needsSetup) return <Navigate to="/setup" replace />;
+  if (ready && needsSetup) {
+    return <Navigate to="/setup" replace />;
+  }
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault();

@@ -43,12 +43,16 @@ export function ShareDialog({
   }, [projectId]);
 
   useEffect(() => {
-    if (open) void reload();
+    if (open) {
+      void reload();
+    }
   }, [open, reload]);
 
   const invite = async (): Promise<void> => {
     const trimmed = email.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -93,7 +97,9 @@ export function ShareDialog({
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") void invite();
+                    if (event.key === "Enter") {
+                      void invite();
+                    }
                   }}
                   placeholder="colleague@example.com"
                 />

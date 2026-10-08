@@ -19,11 +19,15 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Reads DATABASE_URL from the environment, falling back to .env then the default. */
 function databasePath() {
-  if (process.env.DATABASE_URL) return resolve(repoRoot, process.env.DATABASE_URL);
+  if (process.env.DATABASE_URL) {
+    return resolve(repoRoot, process.env.DATABASE_URL);
+  }
   const envFile = resolve(repoRoot, ".env");
   if (existsSync(envFile)) {
     const match = /^DATABASE_URL\s*=\s*(.+)$/m.exec(readFileSync(envFile, "utf8"));
-    if (match?.[1]) return resolve(repoRoot, match[1].trim());
+    if (match?.[1]) {
+      return resolve(repoRoot, match[1].trim());
+    }
   }
   return resolve(repoRoot, "data/chronoplot.sqlite");
 }
@@ -70,7 +74,9 @@ if (!user) {
 }
 
 db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(user.id);
-if (only) db.prepare("UPDATE users SET role = 'user' WHERE id <> ?").run(user.id);
+if (only) {
+  db.prepare("UPDATE users SET role = 'user' WHERE id <> ?").run(user.id);
+}
 
 console.log(`${user.email} is now an administrator${only ? ", and every other account is not" : ""}.\n`);
 list();

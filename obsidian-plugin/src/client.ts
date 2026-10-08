@@ -30,8 +30,12 @@ export class ChronoplotClient {
   }
 
   private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    if (!this.root) throw new ApiError(0, "no_server", "No Chronoplot server address is set.");
-    if (!this.token) throw new ApiError(0, "no_token", "No API token is set.");
+    if (!this.root) {
+      throw new ApiError(0, "no_server", "No Chronoplot server address is set.");
+    }
+    if (!this.token) {
+      throw new ApiError(0, "no_token", "No API token is set.");
+    }
 
     const response = await requestUrl({
       url: `${this.root}${path}`,
