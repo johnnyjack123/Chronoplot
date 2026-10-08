@@ -28,8 +28,11 @@ export class ApiError extends Error {
   }
 }
 
-/*
- * Called whenever the server reports that nobody is signed in.
+let onUnauthenticated: (() => void) | undefined;
+
+/**
+ * Registers the one callback invoked whenever the server reports that nobody
+ * is signed in.
  *
  * A callback rather than an import of the session store, which imports this
  * module - and registering it in one place means no caller can be the one that
@@ -38,9 +41,10 @@ export class ApiError extends Error {
  * "You must be signed in." on every action and only admitting the truth on
  * reload. That state was real, and it was impossible to get out of by using
  * the app.
+ *
+ * @param handler - Called on any 401 outside the sign-in endpoints. A later
+ * call replaces the previous handler.
  */
-let onUnauthenticated: (() => void) | undefined;
-
 export function setUnauthenticatedHandler(handler: () => void): void {
   onUnauthenticated = handler;
 }

@@ -52,6 +52,11 @@ export const PlusIcon = (p: IconProps) => (
   <Icon {...p}><path d="M8 3.5v9M3.5 8h9" /></Icon>
 );
 
+/** A single horizontal stroke, the counterpart to {@link PlusIcon}. */
+export const MinusIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M3.5 8h9" /></Icon>
+);
+
 export const TrashIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M2.75 4.5h10.5M6 4.5V3.25A.75.75 0 0 1 6.75 2.5h2.5a.75.75 0 0 1 .75.75V4.5" />
@@ -193,7 +198,7 @@ export const MagnetIcon = (p: IconProps) => (
   </Icon>
 );
 
-/*
+/**
  * A note with a folded corner, for cards that a note in a vault owns. Not the
  * Obsidian logo: shipping someone's trademark inside the icon set would tie
  * this glyph to one tool, and the same mark has to serve any future source.

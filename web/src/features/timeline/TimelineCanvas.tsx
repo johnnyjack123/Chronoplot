@@ -8,15 +8,17 @@ import { addDays, clampDate, daysBetween, inclusiveDays, snapToPrecision, today 
 import { commands, useEditorStore } from "@/state/editor-store";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Popover";
-import { ChevronDownIcon, ChevronRightIcon, GripIcon, GroupIcon, PlusIcon } from "@/components/icons";
+import {
+  ChevronDownIcon, ChevronRightIcon, GripIcon, GroupIcon, MinusIcon, PlusIcon,
+} from "@/components/icons";
 import { PlotBackground, TimeAxis } from "./Axis";
 import { laneTint } from "./colors";
 import { LinkLayer, PendingLink } from "./Links";
 import { TimelineCard, describeRange, type DragMode } from "./TimelineCard";
 import {
-  buildAxis, clampToWindow, clampZoom, collectSnapTargets, dateAtX, fitUnitsPerDay, laneAtY,
-  layout as computeLayout, snapDrag, snapOffsetDays, subLaneAt, xOf,
-  DEFAULT_LAYOUT, SIDEBAR_WIDTH, type PlacedItem,
+  buildAxis, canRemoveSubLane, clampToWindow, clampZoom, collectSnapTargets, dateAtX,
+  fitUnitsPerDay, laneAtY, layout as computeLayout, snapDrag, snapOffsetDays, subLaneAt, xOf,
+  DEFAULT_LAYOUT, SIDEBAR_WIDTH, type LayoutOptions, type PlacedItem, type PlacedLane,
 } from "./geometry";
 
 /*
@@ -790,6 +792,72 @@ function InlineName({
   );
 }
 
+/**
+ * Sub-lane count, with the two buttons that change it.
+ *
+ * It sits under the lane name rather than in the lane's properties because it
+ * describes the shape of the row you are looking at - and because Remove has to
+ * know whether removal is even possible, which only the computed layout can
+ * say. Hidden on a lane that has just one and is not being pointed at, so a
+ * simple timeline stays quiet.
+ */
+function SubLaneCounter({
+  lane,
+  options,
+  readOnly,
+}: {
+  lane: PlacedLane;
+  options: LayoutOptions;
+  readOnly: boolean;
+}) {
+  if (readOnly) return null;
+
+  const removable = canRemoveSubLane(lane, options);
+  const quiet = lane.subLanes <= 1;
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-0.5 pl-1 transition-opacity duration-[var(--dur-fast)]",
+        quiet && "opacity-0 group-hover/row:opacity-100 focus-within:opacity-100",
+      )}
+    >
+      <Tooltip
+        content={
+          removable
+            ? "Remove the last sub-lane"
+            : lane.subLanes <= 1
+              ? "There is only one sub-lane"
+              : "The cards on the last sub-lane have nowhere to move up to"
+        }
+      >
+        <span>
+          <IconButton
+            label="Remove the last sub-lane"
+            size="sm"
+            disabled={!removable}
+            onClick={() => commands.removeSubLane(lane.rowId)}
+          >
+            <MinusIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+
+      <span className="tabular min-w-4 text-center text-micro text-ink-subtle">{lane.subLanes}</span>
+
+      <Tooltip content="Add a sub-lane">
+        <IconButton
+          label="Add a sub-lane"
+          size="sm"
+          onClick={() => commands.addSubLane(lane.rowId)}
+        >
+          <PlusIcon />
+        </IconButton>
+      </Tooltip>
+    </div>
+  );
+}
+
 function LaneList({
   doc,
   layout,
@@ -981,7 +1049,7 @@ function LaneList({
           <div
             key={lane.rowId}
             className={cn(
-              "group/row absolute left-0 right-0 flex items-center gap-1 border-b border-line pl-1.5",
+              "group/row absolute left-0 right-0 flex flex-col justify-center border-b border-line pl-1.5",
               "transition-[top] duration-[var(--dur-base)] ease-standard",
               indented && "pl-5",
               drag?.kind === "row" && drag.id === lane.rowId && "opacity-40",
@@ -990,6 +1058,7 @@ function LaneList({
             // labels are visibly one thing.
             style={{ top: lane.y, height: lane.height, background: laneTint(lane.color) }}
           >
+            <div className="flex min-w-0 items-center gap-1">
             {!readOnly ? (
               <span
                 role="button"
@@ -1022,6 +1091,9 @@ function LaneList({
             <span className="tabular mr-2 shrink-0 text-micro text-ink-subtle">
               {lane.items.length || ""}
             </span>
+            </div>
+
+            <SubLaneCounter lane={lane} options={layout.options} readOnly={readOnly} />
           </div>
         );
       })}

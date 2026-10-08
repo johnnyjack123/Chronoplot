@@ -492,7 +492,9 @@ function packLane(
   const result = new Map<string, Packed>();
 
   const lineOf = (index: number): { from: number; to: number }[] => {
-    while (claimed.length <= index) claimed.push([]);
+    while (claimed.length <= index) {
+      claimed.push([]);
+    }
     return claimed[index]!;
   };
 
@@ -552,7 +554,9 @@ function packLane(
    * user deliberately placed, and then it is no longer a pin.
    */
   for (const item of items) {
-    if (item.subLane === undefined) continue;
+    if (item.subLane === undefined) {
+      continue;
+    }
     const m = measure(item, items.indexOf(item), items);
     const side = m.sides.find((candidate) => fits(item.subLane!, m.span(candidate).from, m.span(candidate).to))
       ?? m.sides[0]!;
@@ -692,8 +696,12 @@ export function layout(doc: TimelineDoc, options: LayoutOptions = DEFAULT_LAYOUT
   for (const lane of lanes) {
     for (const placed of lane.items) {
       const extent = drawnExtent(placed, cardHeight);
-      if (extent.left < 0) overflowLeft = Math.max(overflowLeft, -extent.left);
-      if (extent.right > width) overflowRight = Math.max(overflowRight, extent.right - width);
+      if (extent.left < 0) {
+        overflowLeft = Math.max(overflowLeft, -extent.left);
+      }
+      if (extent.right > width) {
+        overflowRight = Math.max(overflowRight, extent.right - width);
+      }
     }
   }
 
@@ -724,6 +732,36 @@ export function subLaneAt(lane: PlacedLane, y: number, options: LayoutOptions): 
 /** Top edge of a sub-lane, in the same space as `PlacedItem.y`. */
 export function subLaneTop(lane: PlacedLane, index: number, options: LayoutOptions): number {
   return lane.y + options.lanePadding + index * (options.cardHeight + options.cardGap);
+}
+
+/**
+ * Whether the last sub-lane can be dropped without anything colliding.
+ *
+ * Removing moves its cards up exactly one, so the question is only whether the
+ * sub-lane above has room for them where they are. Without this the button was
+ * always live: pressing it on a lane with no room shuffled cards around and
+ * the count sprang back as the packer re-opened what had just been removed.
+ */
+export function canRemoveSubLane(lane: PlacedLane, options: LayoutOptions): boolean {
+  if (lane.subLanes <= 1) {
+    return false;
+  }
+
+  const last = lane.subLanes - 1;
+  const moving = lane.items.filter((placed) => placed.stack === last);
+  const above = lane.items.filter((placed) => placed.stack === last - 1);
+
+  for (const candidate of moving) {
+    const a = drawnExtent(candidate, options.cardHeight);
+    for (const sitting of above) {
+      const b = drawnExtent(sitting, options.cardHeight);
+      const clear = a.right + options.minItemGap <= b.left || b.right + options.minItemGap <= a.left;
+      if (!clear) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 export interface LaneColumnOptions {

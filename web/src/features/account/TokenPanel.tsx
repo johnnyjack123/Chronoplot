@@ -6,16 +6,6 @@ import { Field, Input } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Controls";
 import { CopyIcon, TrashIcon } from "@/components/icons";
 
-/**
- * API tokens, which is how the Obsidian plugin gets in.
- *
- * The one rule that shapes this whole panel: the secret exists in readable form
- * for exactly one response. There is no "show token" button to build, because
- * only its SHA-256 is stored - so the value has to be presented at creation
- * time, insistently enough that nobody closes the dialog expecting to find it
- * again later.
- */
-
 const EXPIRY_OPTIONS = [
   { value: "0", label: "Never expires" },
   { value: "30", label: "30 days" },
@@ -26,6 +16,17 @@ const EXPIRY_OPTIONS = [
 const when = (at: number | null): string =>
   at === null ? "never" : new Date(at).toLocaleDateString(undefined, { dateStyle: "medium" });
 
+/**
+ * API tokens, which is how the Obsidian plugin gets in.
+ *
+ * The one rule that shapes this whole panel: the secret exists in readable form
+ * for exactly one response. There is no "show token" button to build, because
+ * only its SHA-256 is stored - so the value has to be presented at creation
+ * time, insistently enough that nobody closes the dialog expecting to find it
+ * again later.
+ *
+ * @returns The panel shown on the account dialog's "API tokens" tab.
+ */
 export function TokenPanel() {
   const [tokens, setTokens] = useState<ApiTokenSummary[] | null>(null);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);

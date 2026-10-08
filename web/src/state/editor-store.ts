@@ -319,8 +319,13 @@ export const commands = {
   },
 
   /**
-   * Drops the last sub-lane, and with it the pins of anything standing on it -
-   * those cards go back to being arranged rather than being deleted.
+   * Drops the last sub-lane and moves whatever stood on it up by one.
+   *
+   * Up by *one*, not back to being arranged. Clearing the pin looked right and
+   * was not: the card fell back to the packer, which put it on the first line
+   * with room - so it leapt past every sub-lane in between and landed
+   * somewhere nobody pointed at. A row is removed; its contents shift one row,
+   * exactly as they would in a table.
    */
   removeSubLane(rowId: string): void {
     useEditorStore.getState().mutate((draft) => {
@@ -341,7 +346,7 @@ export const commands = {
       const doomed = effective - 1;
       for (const item of draft.items) {
         if (item.rowId === rowId && item.subLane !== undefined && item.subLane >= doomed) {
-          delete item.subLane;
+          item.subLane = doomed - 1;
         }
       }
       if (doomed <= 1) delete row.subLanes;

@@ -8,7 +8,7 @@
  */
 import type { Item, TimelineDoc } from "../../shared/src/index.ts";
 import {
-  layout as computeLayout, DEFAULT_LAYOUT, collectSnapTargets, snapOffsetDays,
+  layout as computeLayout, DEFAULT_LAYOUT, canRemoveSubLane, collectSnapTargets, snapOffsetDays,
 } from "../src/features/timeline/geometry.ts";
 import { roundedPath } from "../src/features/timeline/Links.tsx";
 
@@ -238,6 +238,69 @@ const byId = (lane: ReturnType<typeof place>, id: string) =>
   );
   check("nothing is pinned by default", lane.items.every((placed) => !placed.pinned));
   check("overlapping labels still split onto sub-lanes", lane.subLanes > 1, String(lane.subLanes));
+}
+
+/* ------------------------------------------- removing the last sub-lane -- */
+
+/* Room above, so the row can collapse. */
+{
+  const doc = makeDoc([
+    { id: "top", start: "2026-01-01", end: "2026-02-28", subLane: 0 },
+    // Nowhere near the one above, so moving it up is free.
+    { id: "bottom", start: "2026-09-01", end: "2026-10-31", subLane: 1 },
+  ]);
+  check("removable when the sub-lane above has room",
+    canRemoveSubLane(place(doc), DEFAULT_LAYOUT));
+}
+
+/* Nothing above it at all. */
+{
+  const doc = makeDoc([{ id: "only", start: "2026-03-01", end: "2026-04-30", subLane: 1 }]);
+  check("removable when the sub-lane above is empty",
+    canRemoveSubLane(place(doc), DEFAULT_LAYOUT));
+}
+
+/* The reported bug: overlapping cards, so the row cannot collapse. */
+{
+  const doc = makeDoc([
+    { id: "top", start: "2026-03-01", end: "2026-08-31", subLane: 0 },
+    { id: "bottom", start: "2026-04-01", end: "2026-09-30", subLane: 1 },
+  ]);
+  check("NOT removable when the cards would collide",
+    !canRemoveSubLane(place(doc), DEFAULT_LAYOUT));
+}
+
+/* A single sub-lane has nothing to remove. */
+{
+  const doc = makeDoc([{ id: "a", start: "2026-03-01", end: "2026-04-30" }]);
+  check("NOT removable when there is only one sub-lane",
+    !canRemoveSubLane(place(doc), DEFAULT_LAYOUT));
+}
+
+/*
+ * Labels count, not just bars. Getting a label to sit on the right needs the
+ * left blocked - otherwise the packer sends it left, where it collides with
+ * nothing and the lane collapses perfectly well. So: a card occupying the left,
+ * the long-titled card next to it, and something under where its title lands.
+ */
+{
+  const doc = makeDoc([
+    { id: "blocker", title: "Blocker", start: "2026-01-01", end: "2026-04-30", subLane: 0 },
+    { id: "top", title: "A title far too long to fit inside this bar", start: "2026-05-05", end: "2026-05-10", subLane: 0 },
+    { id: "bottom", title: "B", start: "2026-06-10", end: "2026-06-20", subLane: 1 },
+  ]);
+  const lane = place(doc);
+  const top = byId(lane, "top");
+
+  // State the premise, so a packer change reports itself rather than quietly
+  // turning this into a test of nothing.
+  check("(premise) the long title sits to the right", top.labelSide === "right", top.labelSide);
+  check("(premise) its label reaches over the card below",
+    top.x + top.width + top.labelWidth > byId(lane, "bottom").x,
+    `${Math.round(top.x + top.width + top.labelWidth)} vs ${Math.round(byId(lane, "bottom").x)}`);
+
+  check("NOT removable when only the label would collide",
+    !canRemoveSubLane(lane, DEFAULT_LAYOUT));
 }
 
 console.log(failed === 0 ? "\nAll packing checks passed" : `\n${failed} check(s) failed`);
