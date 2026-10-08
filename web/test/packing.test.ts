@@ -240,6 +240,79 @@ const byId = (lane: ReturnType<typeof place>, id: string) =>
   check("overlapping labels still split onto sub-lanes", lane.subLanes > 1, String(lane.subLanes));
 }
 
+/* ------------------------------------------------- collapsing back down -- */
+
+/*
+ * The reported bug. Pinning a card to sub-lane 1 and bringing it back to 0
+ * must leave the lane exactly as it was. It did not: the pin was recorded on
+ * the row as well, and that copy never went away, so the lane kept an empty
+ * sub-lane and stayed tall.
+ */
+{
+  const plain = place(makeDoc([{ id: "a", start: "2026-03-01", end: "2026-04-30" }]));
+  const returned = place(makeDoc([{ id: "a", start: "2026-03-01", end: "2026-04-30", subLane: 0 }]));
+
+  check("a card pinned back to the top collapses the lane",
+    returned.subLanes === 1, String(returned.subLanes));
+  check("and the lane is the height it started at",
+    returned.height === plain.height, `${returned.height} vs ${plain.height}`);
+  check("and the card is back at the top", byId(returned, "a").y === byId(plain, "a").y);
+}
+
+/* An explicitly added sub-lane is the one thing that must survive. */
+{
+  const doc = makeDoc([{ id: "a", start: "2026-03-01", end: "2026-04-30", subLane: 0 }]);
+  doc.rows[0]!.subLanes = 2;
+  const lane = place(doc);
+  check("a deliberately added sub-lane is kept when the card returns",
+    lane.subLanes === 2, String(lane.subLanes));
+}
+
+/* --------------------------------------- labels push cards down as bars -- */
+
+/*
+ * The question this has to answer: a bar too short for its title has the title
+ * drawn beside it, and that text occupies space exactly as the bar does. A card
+ * sitting under that text is in the way just as much as one under the bar.
+ */
+{
+  const lane = place(
+    makeDoc([
+      // Fills the left, so the long title below has no free side to flip to.
+      // Without this the packer simply draws it leftwards and no card has to
+      // move at all - which is the better outcome, and not the case under test.
+      { id: "blocker", title: "Blocker", start: "2026-01-01", end: "2026-04-30", subLane: 0 },
+      { id: "pinned", title: "A title much too long to fit inside its own bar", start: "2026-05-05", end: "2026-05-09", subLane: 0 },
+      // Starts after the pinned bar ends, but underneath where its title lands.
+      { id: "loose", title: "L", start: "2026-06-15", end: "2026-06-25" },
+    ]),
+  );
+  const pinned = byId(lane, "pinned");
+  check("(premise) the pinned card's title is drawn to the right",
+    pinned.labelSide === "right", pinned.labelSide);
+  check("(premise) that title reaches over the loose card",
+    pinned.x + pinned.width + pinned.labelWidth > byId(lane, "loose").x,
+    `${Math.round(pinned.x + pinned.width + pinned.labelWidth)} vs ${Math.round(byId(lane, "loose").x)}`);
+  check("a card is pushed down by a label, not just by a bar",
+    byId(lane, "loose").stack === 1, String(byId(lane, "loose").stack));
+}
+
+/* The same rule the other way round: the loose card's own label counts too. */
+{
+  const lane = place(
+    makeDoc([
+      { id: "early", title: "E", start: "2026-02-20", end: "2026-02-24", subLane: 0 },
+      { id: "late", title: "A title far too long for this short bar", start: "2026-02-26", end: "2026-03-01" },
+    ]),
+  );
+  const late = byId(lane, "late");
+  // Either it moved down, or it put its label on the free side - both are
+  // correct, and both mean the label was taken into account.
+  check("a long title is never drawn straight over its neighbour",
+    late.stack === 1 || late.labelSide === "right",
+    `stack ${late.stack}, label ${late.labelSide}`);
+}
+
 /* ------------------------------------------- removing the last sub-lane -- */
 
 /* Room above, so the row can collapse. */

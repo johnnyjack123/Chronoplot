@@ -41,6 +41,10 @@ type DragState =
       originRowId: string;
       /** Sub-lane the card was drawn on when the drag began. */
       originStack: number;
+      /** The card's own pin when the drag began, so returning home restores it. */
+      originSubLane: number | undefined;
+      /** True once this drag has aimed at a different sub-lane or lane. */
+      steered: boolean;
       /** Date the drag latched onto, shown as a guide line while it holds. */
       snappedTo: string | null;
     }
@@ -172,6 +176,8 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
         originEnd: placed.item.end,
         originRowId: placed.item.rowId,
         originStack: placed.stack,
+        originSubLane: placed.item.subLane,
+        steered: false,
         snappedTo: null,
       });
     },
@@ -270,15 +276,35 @@ export function TimelineCanvas({ doc, readOnly }: { doc: TimelineDoc; readOnly: 
         );
 
         /*
-         * Aiming at a sub-lane pins the card there. Only when the aim actually
-         * changed, so a purely sideways drag leaves an unpinned card unpinned
-         * and it keeps arranging itself - pinning on every move would quietly
-         * freeze a whole timeline the first time each card was nudged.
+         * Aiming at a sub-lane pins the card there.
+         *
+         * A purely sideways drag must leave an unpinned card unpinned, or the
+         * first nudge of every card would quietly freeze the whole timeline.
+         * But the test for that used to be "is the aim different from where the
+         * drag began", and that made the move one-way: having pinned a card to
+         * sub-lane 1, aiming back at 0 matched the starting sub-lane, counted
+         * as no change, and did nothing at all. The card could not be brought
+         * back.
+         *
+         * So the trigger is whether this drag has moved vertically *at any
+         * point*. Once it has, every position applies - including a return to
+         * where it started, which restores the card to exactly the state it had
+         * rather than pinning it where it already was.
          */
         if (lane) {
           const target = subLaneAt(lane, point.y, layout.options);
-          const changed = rowId !== drag.originRowId || target !== drag.originStack;
-          if (changed) commands.setSubLane(drag.itemId, target, `move:${drag.itemId}`);
+          const movedLane = rowId !== drag.originRowId;
+          const aiming = movedLane || target !== drag.originStack;
+
+          if (aiming || drag.steered) {
+            const home = !movedLane && target === drag.originStack;
+            commands.setSubLane(
+              drag.itemId,
+              home ? drag.originSubLane ?? null : target,
+              `move:${drag.itemId}`,
+            );
+            if (!drag.steered) setDrag({ ...drag, steered: true });
+          }
         }
         return;
       }

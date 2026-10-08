@@ -357,25 +357,31 @@ export const commands = {
   /**
    * Pins a card to a sub-lane, or lets it be arranged again when given null.
    *
-   * Setting one past what the lane keeps grows the lane, so dropping a card
-   * below the last sub-lane creates the one it was dropped on - which is how
-   * someone discovers the feature without being told about it.
+   * Deliberately does not touch `row.subLanes`. The lane is already drawn tall
+   * enough for its pinned cards - the packer derives that - so growing the row
+   * as well recorded the same fact twice, and the copy on the row never went
+   * away again: bring the card back to the top and the lane kept the empty
+   * sub-lane forever, visibly refusing to collapse. `row.subLanes` means only
+   * "sub-lanes somebody added on purpose".
+   *
+   * @param itemId - The card to pin.
+   * @param subLane - Zero-based sub-lane, or null to let the packer arrange it.
+   * @param coalesceKey - Merges this edit into one undo step with its
+   * neighbours, used so a drag is a single entry.
    */
   setSubLane(itemId: string, subLane: number | null, coalesceKey?: string): void {
     useEditorStore.getState().mutate((draft) => {
       const item = draft.items.find((candidate) => candidate.id === itemId);
-      if (!item) return;
+      if (!item) {
+        return;
+      }
 
       if (subLane === null) {
         delete item.subLane;
         return;
       }
 
-      const index = Math.max(0, Math.min(49, Math.round(subLane)));
-      item.subLane = index;
-
-      const row = draft.rows.find((candidate) => candidate.id === item.rowId);
-      if (row && index + 1 > (row.subLanes ?? 1)) row.subLanes = index + 1;
+      item.subLane = Math.max(0, Math.min(49, Math.round(subLane)));
     }, coalesceKey ? { coalesceKey } : undefined);
   },
 
